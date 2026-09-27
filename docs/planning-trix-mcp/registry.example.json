@@ -1,0 +1,173 @@
+# Registry contoh — Planning Trix MCP
+
+Salinan ini contoh bentuk. Saat implementasi, file asli ada di
+`tools/planning-trix-mcp/src/registry/planning.json` dan divalidasi terhadap
+header asli tiap tab di sheet.
+
+Prinsip:
+
+- Satu baris per tab. `kind` salah satu dari
+  `Aktif | Referensi | Draft | Legacy | Duplikat | Arsip`.
+- `headerRow` = baris header kolom di tab itu (beda-beda: Overview baris 2,
+  Budget baris 4, General Task baris 1).
+- `revRow` = baris tempat `Rev. <tanggal>` ditulis (biasanya baris 2).
+- `columns` memetakan nama field kanonik → huruf kolom. Kalau header sheet
+  bergeser, cukup ubah file ini; kode tool tidak berubah.
+- Tab `kind: "Arsip"` ditolak jalur tulis.
+
+```json
+{
+  "spreadsheetId": "<isi-saat-implementasi>",
+  "statusEnum": ["Belum Mulai", "Proses", "Terblokir", "Selesai", "Batal", "N/A"],
+  "paymentEnum": ["Belum Bayar", "DP", "Lunas"],
+  "statusMap": {
+    "Not Started": "Belum Mulai",
+    "To do": "Belum Mulai",
+    "In-Progress": "Proses",
+    "In Progress": "Proses",
+    "On Progress": "Proses",
+    "PROCESS": "Proses",
+    "Doing": "Proses",
+    "Done": "Selesai",
+    "Completed": "Selesai",
+    "LUNAS": "Lunas",
+    "Aktif": "Selesai"
+  },
+  "tabs": [
+    {
+      "title": "000 - Standar & Index",
+      "kind": "Aktif",
+      "entity": "index",
+      "headerRow": 4,
+      "columns": {
+        "tab": "A", "status": "B", "purpose": "C", "issues": "D",
+        "owner": "E", "action": "F"
+      }
+    },
+    {
+      "title": "Overview",
+      "kind": "Aktif",
+      "entity": "event_profile",
+      "headerRow": 2,
+      "columns": { "field": "A", "value": "B", "remarks": "C" }
+    },
+    {
+      "title": "General Task",
+      "kind": "Aktif",
+      "entity": "task",
+      "headerRow": 1,
+      "revRow": null,
+      "columns": {
+        "id": "A", "task": "B", "priority": "C", "pic": "D",
+        "note": "E", "status": "F", "deadline": "G"
+      }
+    },
+    {
+      "title": "Budget 2026 (Draft)",
+      "kind": "Aktif",
+      "entity": "budget_line",
+      "headerRow": 4,
+      "revRow": 2,
+      "columns": {
+        "category": "A", "item": "B", "qty": "C", "unit": "D",
+        "unit_price": "E", "total": "F", "note": "G"
+      }
+    },
+    {
+      "title": "Budget 2026 - In Out",
+      "kind": "Aktif",
+      "entity": "budget_summary",
+      "headerRow": 4,
+      "revRow": 2,
+      "columns": {
+        "type": "A", "source": "B", "nominal": "C", "status": "D", "note": "E"
+      }
+    },
+    {
+      "title": "Tiket 2026 (Draft)",
+      "kind": "Aktif",
+      "entity": "ticket",
+      "headerRow": 4,
+      "revRow": 2,
+      "columns": {
+        "tier": "A", "includes": "B", "price": "C", "packages": "D",
+        "pax": "E", "total": "F", "note": "G"
+      }
+    },
+    {
+      "title": "Paket Sponsor 2026 (Draft)",
+      "kind": "Aktif",
+      "entity": "sponsor_package",
+      "headerRow": 4,
+      "revRow": 2,
+      "columns": {
+        "name": "A", "slots": "B", "price": "C", "potential": "D", "note": "E"
+      }
+    },
+    {
+      "title": "[LO] Speakers Candidate",
+      "kind": "Aktif",
+      "entity": "speaker_candidate",
+      "headerRow": 1,
+      "columns": {
+        "name": "A", "topic": "B", "role": "C", "pic": "D",
+        "notes": "E", "status": "F"
+      }
+    },
+    {
+      "title": "REF - Speaker Candidate",
+      "kind": "Referensi",
+      "entity": "speaker_reference",
+      "headerRow": 1,
+      "columns": { "name": "A", "topic": "B", "roles": "C", "notes": "E" }
+    },
+    {
+      "title": "LOGISTIC - NEEDS",
+      "kind": "Legacy",
+      "entity": "logistic_need",
+      "headerRow": 5,
+      "columns": {
+        "division": "B", "item": "C", "qty": "D", "notes": "E", "status": "F"
+      }
+    },
+    {
+      "title": "LOGISTIC - VENDOR",
+      "kind": "Aktif",
+      "entity": "vendor",
+      "headerRow": 4,
+      "columns": {
+        "item": "B", "vendor": "C", "link": "D", "contact": "E", "note": "F"
+      }
+    },
+    {
+      "title": "Timeline Acara 2026 (Draft)",
+      "kind": "Aktif",
+      "entity": "agenda_block",
+      "headerRow": 6,
+      "revRow": 2,
+      "columns": {
+        "start": "A", "end": "B", "duration": "C", "session": "D",
+        "format": "E", "pic": "F", "note": "G"
+      }
+    },
+    {
+      "title": "Agenda for App",
+      "kind": "Legacy",
+      "entity": "agenda_app",
+      "headerRow": 1,
+      "columns": {
+        "id": "A", "title": "B", "description": "C", "speaker": "D",
+        "location": "E", "track": "F", "start_time": "G", "end_time": "H",
+        "capacity": "I", "is_active": "K"
+      }
+    },
+    {
+      "title": "Job on Stage 2025 (Backup)",
+      "kind": "Arsip",
+      "entity": "lo_assignment_2025",
+      "headerRow": 2,
+      "columns": {}
+    }
+  ]
+}
+```
