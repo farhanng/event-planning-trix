@@ -1,15 +1,30 @@
 {
-  "_comment": "Registry contoh — Planning Trix MCP. Satu baris per tab. kind: Aktif | Referensi | Arsip. headerRow = baris header kolom. revRow = baris tempat 'Rev. <tanggal>' ditulis. columns memetakan field kanonik -> huruf kolom. Tab kind 'Arsip' ditolak jalur tulis. Nama tab straight-forward, tanpa embel 'Draft'/'2026'.",
+  "_comment": "Registry contoh — Planning Trix MCP, rev 0.3. DUA lapis: (1) events[] = katalog event (1 event = 1 folder Drive + 1 spreadsheet), id selalu lewat env var, tidak pernah literal; (2) tabs[] = pemetaan tab -> entitas -> kolom, SATU SET PER EVENT karena skema antar event memang beda. kind: Aktif | Referensi | Arsip | Draft | Turunan. Tab 'Arsip' dan 'Draft' ditolak jalur tulis; 'Turunan' wajib punya derivedFrom. Setiap tool WAJIB terima parameter event (slug di katalog ini); tidak ada default 'event terbaru'.",
 
   "environment": {
-    "dev": { "spreadsheetIdEnv": "PTX_SPREADSHEET_ID_DEV", "access": "editor" },
-    "prod": { "spreadsheetIdEnv": "PTX_SPREADSHEET_ID_PROD", "access": "viewer" }
+    "dev": { "overlayEnv": "PTX_DEV_OVERLAY", "access": "editor" },
+    "prod": { "access": "viewer", "forceReadOnly": true }
+  },
+
+  "portfolio": {
+    "id": "gdgc-bdg",
+    "name": "GDG Cloud Bandung",
+    "driveRootFolderId": "<DRIVE_ROOT_FOLDER_ID>"
   },
 
   "statusEnum": ["Belum Mulai", "Proses", "Terblokir", "Selesai", "Batal", "N/A"],
   "paymentEnum": ["Belum Bayar", "DP", "Lunas"],
-  "zonaEnum": ["Main Hall", "Workshop", "Auditorium"],
-  "priorityEnum": ["High", "Mid", "Low"],
+  "prioritasEnum": ["High", "Mid", "Low"],
+  "faseEnum": ["Pra Event", "Hari-H", "Pasca Event"],
+  "jenisEventEnum": ["DevFest", "Cloud Next", "JuaraGCP", "IWD/WTM", "Roadshow", "BWAI", "Study Jam", "Tech Talk"],
+  "tipeOrganizerEnum": ["Core", "Committee", "Volunteer"],
+  "peranHariEnum": ["Pre Day (PD)", "The Day (D)", "Both"],
+  "statusKontakEnum": ["Belum Dikontak", "Dihubungi", "Dealing", "Win", "Batal"],
+  "tipePartnerEnum": ["Sponsor", "Media Partner", "Community", "In-Kind"],
+  "statusPesananEnum": ["Belum Pesan", "Dipesan", "Produksi", "Selesai Produksi", "Diambil"],
+  "kurasiEnum": ["Select", "Reject", "Waitlist"],
+  "zonaEnum": ["Main Hall", "Workshop", "Auditorium", "Foyer", "Kids Zone"],
+  "tabKindEnum": ["Aktif", "Referensi", "Arsip", "Draft", "Turunan"],
 
   "statusMap": {
     "Not Started": "Belum Mulai",
@@ -20,232 +35,444 @@
     "On Progress": "Proses",
     "PROCESS": "Proses",
     "Doing": "Proses",
+    "Soon": "Proses",
     "Done": "Selesai",
     "Completed": "Selesai",
     "Aktif": "Selesai",
+    "Cancel": "Batal",
     "LUNAS": "Lunas"
   },
 
-  "tabs": [
+  "events": [
     {
-      "title": "Index & Standar",
+      "slug": "devfest26",
+      "name": "DevFest Cloud Bandung 2026",
+      "jenis": "DevFest",
+      "year": 2026,
+      "date": "2026-11-28",
+      "folderId": "<FOLDER_DEVFEST26>",
+      "spreadsheetIdEnv": "PTX_SPREADSHEET_ID_DEVFEST26",
+      "access": "viewer",
+      "active": true,
+      "registryFile": "planning.devfest26.json"
+    },
+    {
+      "slug": "devfest25",
+      "name": "DevFest Cloud Bandung 2025",
+      "jenis": "DevFest",
+      "year": 2025,
+      "date": "2025-12-06",
+      "folderId": "<FOLDER_DEVFEST25>",
+      "spreadsheetIdEnv": "PTX_SPREADSHEET_ID_DEVFEST25",
+      "access": "viewer",
+      "active": false,
+      "registryFile": "planning.devfest25.json"
+    },
+    {
+      "slug": "devfest24",
+      "name": "Cloud DevFest Bandung 2024",
+      "jenis": "DevFest",
+      "year": 2024,
+      "folderId": "<FOLDER_DEVFEST24>",
+      "spreadsheetIdEnv": "PTX_SPREADSHEET_ID_DEVFEST24",
+      "access": "viewer",
+      "active": false,
+      "note": "Tidak ada Planning Trix utuh; yang ada Liquidation Summary + Tracking."
+    },
+    {
+      "slug": "cloudnext26",
+      "name": "Cloud Next Bandung 2026",
+      "jenis": "Cloud Next",
+      "year": 2026,
+      "folderId": "<FOLDER_CLOUDNEXT26>",
+      "spreadsheetIdEnv": "PTX_SPREADSHEET_ID_CLOUDNEXT26",
+      "access": "viewer",
+      "active": true,
+      "registryFile": "planning.cloudnext26.json"
+    },
+    {
+      "slug": "juaragcp26",
+      "name": "JuaraGCP 2026 Cloud Bandung",
+      "jenis": "JuaraGCP",
+      "year": 2026,
+      "folderId": "<FOLDER_JUARAGCP26>",
+      "spreadsheetIdEnv": "PTX_SPREADSHEET_ID_JUARAGCP26",
+      "access": "viewer",
+      "active": true,
+      "registryFile": "planning.juaragcp26.json"
+    },
+    {
+      "slug": "roadshow25",
+      "name": "Cloud Roadshow 2025",
+      "jenis": "Roadshow",
+      "year": 2025,
+      "folderId": "<FOLDER_ROADSHOW25>",
+      "spreadsheetIdEnv": "PTX_SPREADSHEET_ID_ROADSHOW25",
+      "access": "viewer",
+      "active": false
+    },
+    {
+      "slug": "iwd25",
+      "name": "International Women's Day 2025",
+      "jenis": "IWD/WTM",
+      "year": 2025,
+      "folderId": "<FOLDER_IWD25>",
+      "spreadsheetIdEnv": "PTX_SPREADSHEET_ID_IWD25",
+      "access": "viewer",
+      "active": false
+    },
+    {
+      "slug": "master",
+      "name": "Master Data (lintas event)",
+      "jenis": null,
+      "year": null,
+      "folderId": "<FOLDER_VOLUNTEER>",
+      "spreadsheetIdEnv": "PTX_SPREADSHEET_ID_MASTER",
+      "access": "viewer",
+      "active": true,
+      "readOnly": true,
+      "note": "Tab Event + Venue + README. Sumber angka lintas event (attendees, female speaker, drop rate)."
+    },
+    {
+      "slug": "templates",
+      "name": "Templates resmi",
+      "jenis": null,
+      "year": null,
+      "folderId": "<FOLDER_TEMPLATES>",
+      "spreadsheetIdEnv": "PTX_SPREADSHEET_ID_TEMPLATES",
+      "access": "viewer",
+      "active": true,
+      "readOnly": true,
+      "note": "Event Planner List + Asset Inventory. Dipakai sebagai TEMPLATE_REFERENCE, bukan disalin manual."
+    }
+  ],
+
+  "tabs": {
+    "_comment": "Contoh untuk event devfest26. Event lain punya file registry sendiri (lihat events[].registryFile) karena nama & jumlah tab beda (2026: 57 tab, 2025: 41 tab, Cloud Next 2026: 31 tab).",
+
+    "Overview": {
       "kind": "Aktif",
-      "entity": "index",
+      "entity": "event",
+      "headerRow": 2,
+      "revRow": 2,
+      "columns": { "field": "A", "value": "B", "remarks": "C" },
+      "note": "Baris Resources/Forms -> EVENT_REFERENCE; Goals -> target di EVENT."
+    },
+    "Index & Standar": {
+      "kind": "Aktif",
+      "entity": "event_tab",
       "headerRow": 4,
+      "revRow": 2,
       "columns": {
         "tab": "A", "kind": "B", "purpose": "C", "issues": "D",
-        "owner": "E", "action": "F", "link": "G"
+        "owner_pic": "E", "action": "F", "link": "G"
       }
     },
-    {
-      "title": "Overview",
-      "kind": "Aktif",
-      "entity": "event_profile",
-      "headerRow": 2,
-      "columns": { "field": "A", "value": "B", "remarks": "C" }
-    },
-    {
-      "title": "Task",
-      "kind": "Aktif",
-      "entity": "task",
-      "headerRow": 4,
-      "columns": {
-        "id": "A", "task": "B", "division": "C", "pic": "D",
-        "deadline": "E", "priority": "F", "status": "G", "note": "H"
-      }
-    },
-    {
-      "title": "Budget",
+    "Budget 2026 (Draft)": {
       "kind": "Aktif",
       "entity": "budget_line",
       "headerRow": 4,
       "revRow": 2,
       "columns": {
         "category": "A", "item": "B", "qty": "C", "unit": "D",
-        "unit_price": "E", "total": "F", "note": "G"
+        "unit_price_idr": "E", "total_idr": "F", "note": "G"
       }
     },
-    {
-      "title": "Budget In Out",
-      "kind": "Aktif",
+    "Budget 2026 - In Out": {
+      "kind": "Turunan",
+      "derivedFrom": "Budget 2026 (Draft)",
       "entity": "budget_summary",
       "headerRow": 4,
       "revRow": 2,
       "columns": {
-        "type": "A", "source": "B", "nominal": "C", "status": "D", "note": "E"
+        "type": "A", "source": "B", "nominal_idr": "C", "status": "D", "note": "E"
       }
     },
-    {
-      "title": "Tiket",
+    "Tiket 2026 (Draft)": {
       "kind": "Aktif",
       "entity": "ticket_tier",
       "headerRow": 4,
       "revRow": 2,
       "columns": {
-        "tier": "A", "includes": "B", "price": "C", "packages": "D",
-        "pax": "E", "total": "F", "note": "G"
+        "tier": "A", "includes": "B", "price_idr": "C", "packages": "D",
+        "pax": "E", "total_idr": "F", "note": "G"
       }
     },
-    {
-      "title": "Paket Sponsor",
+    "Paket Sponsor 2026 (Draft)": {
       "kind": "Aktif",
       "entity": "sponsor_package",
       "headerRow": 4,
       "revRow": 2,
-      "columns": {
-        "name": "A", "slots": "B", "price": "C", "potential": "D", "note": "E"
-      }
+      "columns": { "name": "A", "slots": "B", "price_idr": "C", "potential_idr": "D", "note": "E" }
     },
-    {
-      "title": "Target Partnership",
+    "Target Partnership": {
       "kind": "Aktif",
-      "entity": "sponsor_prospect",
+      "entity": "partnership_deal",
       "headerRow": 1,
       "columns": {
-        "company": "A", "pic": "C", "expected_usd": "D", "status": "E",
-        "note": "F", "contact_name": "G", "title": "H", "link": "I"
-      }
+        "company": "B", "pic": "C", "expected_idr": "D", "status": "E",
+        "note_update": "F", "contact_person": "G", "title": "H",
+        "link_contact": "I", "address": "J", "phone": "K", "email": "L",
+        "tipe": null
+      },
+      "note": "company -> COMPANY (upsert by name); kolom 'No.' diabaikan."
     },
-    {
-      "title": "Speaker Candidate",
+    "MEDIA PARTNER": {
       "kind": "Aktif",
-      "entity": "speaker_candidate",
-      "headerRow": 4,
+      "entity": "partnership_deal",
+      "headerRow": 1,
       "columns": {
-        "id": "A", "name": "B", "topic": "C", "role": "D", "pic": "E",
-        "status": "F", "note": "G"
-      }
+        "company": "A", "category": "B", "social_url": "C", "email": "D",
+        "phone": "E", "address": "F", "media_terms": "G"
+      },
+      "constants": { "tipe": "Media Partner" },
+      "note": "Tabel MediaPartner lama dilebur ke PARTNERSHIP_DEAL agar satu perusahaan tidak dobel record."
     },
-    {
-      "title": "REF - Speaker",
-      "kind": "Referensi",
-      "entity": "speaker_reference",
-      "headerRow": 4,
-      "columns": { "name": "A", "topic": "B", "roles": "C", "notes": "E" }
-    },
-    {
-      "title": "Commitee",
+    "[LO] Speakers Candidate": {
       "kind": "Aktif",
-      "entity": "committee",
-      "headerRow": 4,
+      "entity": "speaker_pipeline",
+      "headerRow": 1,
       "columns": {
-        "name": "A", "preday_role": "B", "day_role": "C", "size": "D",
-        "contact": "E", "division": "F"
+        "person_name": "A", "topic": "B", "role_title": "C", "contact_pic": "D",
+        "note": "E", "status": "F"
       }
     },
-    {
-      "title": "Volunteer",
-      "kind": "Aktif",
-      "entity": "volunteer",
-      "headerRow": 4,
-      "columns": {
-        "id": "A", "name": "B", "division": "C", "role": "D",
-        "email": "E", "phone": "F"
-      }
-    },
-    {
-      "title": "Logistic Needs",
-      "kind": "Aktif",
-      "entity": "logistic_need",
-      "headerRow": 4,
-      "columns": {
-        "division": "B", "item": "C", "qty": "D", "notes": "E", "status": "F"
-      }
-    },
-    {
-      "title": "Logistic Vendor",
-      "kind": "Aktif",
-      "entity": "vendor",
-      "headerRow": 5,
-      "columns": {
-        "item": "B", "vendor": "C", "link": "D", "contact": "E", "note": "F"
-      }
-    },
-    {
-      "title": "Agenda",
-      "kind": "Aktif",
-      "entity": "agenda_block",
-      "headerRow": 4,
-      "revRow": 2,
-      "columns": {
-        "zona": "A", "start": "B", "end": "C", "session": "D",
-        "format": "E", "pic": "F", "note": "G"
-      }
-    },
-    {
-      "title": "Job on Stage",
+    "Job on Stage 2026 (Clean)": {
       "kind": "Aktif",
       "entity": "lo_assignment",
       "headerRow": 5,
       "columns": {
         "id": "A", "name": "B", "contact": "C", "origin": "D",
         "role": "E", "status": "F", "note": "G"
-      }
+      },
+      "note": "Assignment per sesi ikut ke kolom H+ (blok 2026 masih kosong)."
     },
-    {
-      "title": "Media Partner",
+    "Commitee": {
       "kind": "Aktif",
-      "entity": "media_partner",
-      "headerRow": 4,
+      "entity": "organizer",
+      "headerRow": 1,
       "columns": {
-        "name": "A", "category": "B", "social": "C", "email": "D",
-        "phone": "E", "address": "F", "terms": "G"
-      }
+        "name": "A", "pre_day_role": "B", "day_role": "C",
+        "shirt_size": "D", "contact": "E"
+      },
+      "constants": { "tipe": "Committee" },
+      "note": "ORGANIZER + ASSIGNMENT. Header 5 kolom tapi link volunteer nyasar di kolom G -> dibersihkan. 37 nama tanpa nomor HP; dedup by email dengan tab Final New Volunteer."
     },
-    {
-      "title": "Learning & Practice",
-      "kind": "Referensi",
-      "entity": "learning_note",
-      "headerRow": 3,
+    "Final New Volunteer": {
+      "kind": "Aktif",
+      "entity": "organizer",
+      "headerRow": 1,
       "columns": {
-        "phase": "A", "logistics": "B", "participant": "C",
-        "speaker": "D", "facilitator": "E"
-      }
+        "no": "A", "name": "B", "division": "C", "role": "D",
+        "email": "E", "phone": "F", "occupation": "G"
+      },
+      "constants": { "tipe": "Volunteer" },
+      "note": "Sumber kebenaran nomor HP panitia. after upsert ke ORGANIZER, division+role jadi ASSIGNMENT."
     },
-    {
-      "title": "Volunteer Guide",
+    "Volunteer Guide": {
       "kind": "Referensi",
       "entity": "division_guide",
       "headerRow": 2,
       "columns": {
-        "division": "A", "jobdesk": "B", "positions": "C", "details": "D",
-        "headcount": "E", "overlap": "F", "note": "G"
+        "division": "A", "jobdesk_utama": "B", "positions": "C",
+        "jobdesc_per_position": "D", "headcount_ideal": "E",
+        "overlap_ok": "F", "note": "G"
       }
     },
-    {
-      "title": "Agenda (Arsip 2025)",
-      "kind": "Arsip",
-      "entity": "agenda_block_2025",
-      "headerRow": 2,
-      "columns": {}
+    "HR": {
+      "kind": "Referensi",
+      "entity": "hr_position",
+      "headerRow": 4,
+      "columns": { "position": "A", "description": "B", "pic": "C", "note": "D" }
     },
-    {
-      "title": "Task (Arsip 2025)",
-      "kind": "Arsip",
-      "entity": "task_2025",
+    "LOGISTIC": {
+      "kind": "Aktif",
+      "entity": "logistic_need",
       "headerRow": 1,
-      "columns": {}
+      "columns": {
+        "no": "A", "sub_no": "B", "item": "C", "detail": "D", "vendor": "E",
+        "qty": "F", "unit": "G", "unit_price_idr": "H", "total_idr": "I",
+        "invoice_link": "J", "dp": "K", "remaining": "L",
+        "full_payment_due_date": "M", "pic": "N", "note": "O", "status_bayar": "P"
+      },
+      "note": "Kolom DP/Remaining/due date TIDAK disimpan di baris ini; diekstrak ke PAYMENT (ref_type=Budget Line)."
     },
-    {
-      "title": "Logistic Track (Arsip 2025)",
-      "kind": "Arsip",
-      "entity": "logistic_track_2025",
+    "LOGISTIC - TRACK": {
+      "kind": "Aktif",
+      "entity": "purchase_order",
       "headerRow": 1,
-      "columns": {}
+      "columns": {
+        "item": "B", "vendor": "C", "invoice_link": "D", "status_bayar": "E",
+        "order_date": "F", "eta_date": "G", "received_date": "H",
+        "qty": "I", "pic": "J", "note": "K"
+      }
     },
-    {
-      "title": "Venue List (Arsip 2025)",
-      "kind": "Arsip",
-      "entity": "venue_2025",
-      "headerRow": 2,
-      "columns": {}
+    "LOGISTIC - VENDOR": {
+      "kind": "Aktif",
+      "entity": "vendor",
+      "headerRow": 4,
+      "columns": {
+        "item": "B", "vendor": "C", "link": "D", "contact": "E", "note": "F"
+      }
     },
-    {
-      "title": "Job on Stage (Arsip 2025)",
-      "kind": "Arsip",
-      "entity": "lo_assignment_2025",
+    "LOGISTIC - NEEDS": {
+      "kind": "Aktif",
+      "entity": "logistic_need",
+      "headerRow": 4,
+      "columns": {
+        "division": "B", "item": "C", "qty": "D", "note": "E", "status_bayar": "F"
+      }
+    },
+    "LOGISTIC - PLACEMENT": {
+      "kind": "Aktif",
+      "entity": "logistic_placement",
       "headerRow": 2,
-      "columns": {}
-    }
-  ]
+      "columns": {
+        "item": "A", "owner": "B", "proof_link": "C", "pic": "D", "status": "E"
+      },
+      "note": "Blok berulang per ruangan (CLASSROOM 1/2/3 -> ZONA)."
+    },
+    "LOGISTIC - Size T-Shirt Speaker": {
+      "kind": "Turunan",
+      "derivedFrom": "Speakers",
+      "entity": "shirt_size",
+      "headerRow": 1,
+      "columns": {
+        "person_ref": "A", "size": "B", "long_sleeve": "C", "confirmed": "D"
+      },
+      "note": "Tiga tab size (Speaker/Committee/Committ) dilebur jadi satu SHIRT_SIZE."
+    },
+    "LOGISTIC - Size T-Shirt Committee": {
+      "kind": "Turunan",
+      "derivedFrom": "Commitee",
+      "entity": "shirt_size",
+      "headerRow": 1,
+      "columns": {
+        "timestamp": "A", "email": "B", "person_ref": "C", "size": "D"
+      }
+    },
+    "LOGISTIC - Size T-Shirt Committ": {
+      "kind": "Turunan",
+      "derivedFrom": "Commitee",
+      "entity": "shirt_size",
+      "headerRow": 1,
+      "columns": {
+        "person_ref": "A", "size": "B", "long_sleeve": "C", "revised_size": "D"
+      }
+    },
+    "Agenda for App": {
+      "kind": "Aktif",
+      "entity": "session",
+      "headerRow": 1,
+      "columns": {
+        "app_id": "A", "title": "B", "description": "C", "speaker": "D",
+        "location": "E", "track": "F", "start_time": "G", "end_time": "H",
+        "capacity": "I", "booked_count": "J", "is_active": "K",
+        "created_at": "L", "updated_at": "M", "is_bookable": "N",
+        "is_hybrid": "O", "live_url": "P"
+      },
+      "note": "Konsumsi app; BUKAN arsip. Data 2025 di dalamnya wajib di-reset ke 2026."
+    },
+    "Timeline Acara 2026 (Draft)": {
+      "kind": "Draft",
+      "entity": "agenda_block",
+      "headerRow": 2,
+      "columns": {
+        "zona": "A", "start": "B", "end": "C", "duration": "D",
+        "interval": "E", "format": "F", "speaker": "G", "job_title": "H",
+        "topic": "I", "asset": "J", "lo": "K", "note": "L", "fixed": "M"
+      }
+    },
+    "Objectives": {
+      "kind": "Aktif",
+      "entity": "objective",
+      "headerRow": 1,
+      "columns": {
+        "objective": "A", "key_result": "B", "pic": "C", "metric": "D",
+        "target": "E", "value": "F", "percentage": "G"
+      }
+    },
+    "General Task": {
+      "kind": "Aktif",
+      "entity": "task",
+      "headerRow": 1,
+      "columns": {
+        "no": "A", "title": "B", "priority": "C", "pic": "D",
+        "note": "E", "status": "F", "due_date": "G"
+      }
+    },
+    "Group WA per Divisi": {
+      "kind": "Turunan",
+      "derivedFrom": "Commitee",
+      "entity": "division_wa_group",
+      "headerRow": 3,
+      "columns": {
+        "division": "A", "group_name": "B", "length": "C", "lead_pic": "D",
+        "actual": "E", "target": "F", "gap": "G", "hp_available": "H",
+        "hp_missing": "I", "recommendation": "J"
+      }
+    },
+    "GDE Pool 2026 (Riset)": {
+      "kind": "Referensi",
+      "entity": "gde_pool",
+      "headerRow": 1,
+      "columns": {
+        "no": "A", "name": "B", "domicile": "C", "specialization": "D",
+        "profile_url": "E", "priority": "F", "note": "G"
+      }
+    },
+    "Travel Speaker 2026 (Hitung)": {
+      "kind": "Aktif",
+      "entity": "travel_cost",
+      "headerRow": 4,
+      "columns": {
+        "mode": "A", "cost_per_trip_idr": "B", "basis": "C", "note": "D"
+      }
+    },
+    "VENUE": {
+      "kind": "Aktif",
+      "entity": "venue",
+      "headerRow": 2,
+      "columns": {
+        "no": "A", "name": "B", "capacity": "C", "pic": "D", "price": "E",
+        "action_items": "F", "concern": "G", "note": "H"
+      },
+      "note": "Blok fasilitas (Stage/Screen/Sound/Chair/Waiting Room/Wifi/Parking) -> VENUE_FACILITY."
+    },
+
+    "=== LEGACY 2025 (pindah ke file devfest25 atau tandai arsip) ===": {},
+    "Agenda": { "kind": "Arsip", "entity": "agenda_block_2025", "headerRow": 2, "columns": {} },
+    "Agenda Disparbud": { "kind": "Arsip", "entity": "agenda_block_2025", "headerRow": 2, "columns": {} },
+    "Venue List": { "kind": "Arsip", "entity": "venue_2025", "headerRow": 2, "columns": {} },
+    "Venue Candidate": { "kind": "Arsip", "entity": "venue_candidate_2025", "headerRow": 1, "columns": {} },
+    "Budget Breakdown": { "kind": "Arsip", "entity": "budget_line_2025", "headerRow": 1, "columns": {} },
+    "Task OBJ 1 (Peserta)": { "kind": "Arsip", "entity": "task_2025", "headerRow": 2, "columns": {} },
+    "Task OBJ 2 (Pembicara)": { "kind": "Arsip", "entity": "task_2025", "headerRow": 2, "columns": {} },
+    "Task OBJ 3 (Sponsor)": { "kind": "Arsip", "entity": "task_2025", "headerRow": 2, "columns": {} },
+    "Task Management": { "kind": "Arsip", "entity": "task_2025", "headerRow": 1, "columns": {} },
+    "Event Task": { "kind": "Arsip", "entity": "task_2025", "headerRow": 1, "columns": {} },
+    "Old Task Template": { "kind": "Arsip", "entity": "task_template_2025", "headerRow": 2, "columns": {} },
+    "Doorprize": { "kind": "Arsip", "entity": "doorprize_2025", "headerRow": 2, "columns": {} },
+    "Speaker Question": { "kind": "Arsip", "entity": "speaker_question_2025", "headerRow": 1, "columns": {} },
+    "Redeem & Point": { "kind": "Arsip", "entity": "redeem_action_2025", "headerRow": 2, "columns": {} },
+    "Dokumentasi": { "kind": "Arsip", "entity": "documentation_item_2025", "headerRow": 2, "columns": {} },
+    "JOBDESK DOKUM HARI-H": { "kind": "Arsip", "entity": "doc_assignment_2025", "headerRow": 2, "columns": {} },
+    "DevFest 2023 - Speaker": { "kind": "Arsip", "entity": "speaker_reference_2023", "headerRow": 1, "columns": {} },
+    "Job on Stage 2025 (Backup)": { "kind": "Arsip", "entity": "lo_assignment_2025", "headerRow": 1, "columns": {} },
+
+    "=== DUPLIKAT (kandidat hapus/arsipkan) ===": {},
+    "Copy of Timeline": { "kind": "Turunan", "derivedFrom": "Timeline", "entity": "timeline", "headerRow": 2, "columns": {}, "note": "Duplikat persis; kandidat hapus." }
+  },
+
+  "checks": {
+    "requireEventParam": true,
+    "rejectWriteKinds": ["Arsip", "Draft"],
+    "requireDerivedFrom": ["Turunan"],
+    "rejectUnknownEnum": true,
+    "picDeadlineRequired": true,
+    "phoneFormat": "+62 813-8688-1171",
+    "dateFormat": "28 Nov 2026",
+    "booleanFormat": "Ya/Tidak",
+    "conflictPolicy": "report"
+  }
 }

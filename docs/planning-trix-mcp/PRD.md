@@ -1,11 +1,24 @@
 # PRD — Planning Trix Data Gateway (MCP)
 
-- Status: Draft 0.2
-- Versi: 0.2 (revisi dari 0.1)
+- Status: Draft 0.3
+- Versi: 0.3 (revisi dari 0.2)
 - Tanggal: 27 Sep 2026
 - Owner: Kak Farhan
 - Penulis: DevFest AI
 - Target: MCP server `planning-trix`
+
+Perubahan 0.3 (feedback Kak Farhan 27 Sep 2026):
+
+1. **Dimensi event ditambah.** Planning Trix ditulis per event di folder Drive
+   sendiri, jadi hierarki resmi `Portfolio → Event → Spreadsheet → Tab`. Event
+   lintas tahun = event berbeda, bukan kolom tahun.
+2. **Committee + Volunteer disatukan** jadi entitas `ORGANIZER` + tabel
+   `ASSIGNMENT` (orang yang sama bisa isi beberapa role di event).
+3. ERD diperluas 17 → 58 entitas, hasil recon 4 Planning Trix lain + Templates +
+   Master Data; entitas baru antara lain `PAYMENT`, `PURCHASE_ORDER`,
+   `PARTICIPANT`, `REGISTRATION`, `SESSION`, `RISK`, `COMPANY`,
+   `PARTNERSHIP_DEAL`.
+4. Tool MCP **wajib** menyebut `event`; tidak ada default "event terbaru".
 
 Perubahan 0.2 (feedback Kak Farhan 27 Sep 2026):
 
@@ -20,27 +33,36 @@ Perubahan 0.2 (feedback Kak Farhan 27 Sep 2026):
 
 ## 1. Latar Belakang
 
-Planning Trix adalah sumber kebenaran data persiapan DevFest 2026. Hasil audit
-27 Sep 2026:
+Planning Trix adalah sumber kebenaran data persiapan event GDG Cloud Bandung,
+satu file per event. Hasil audit file DevFest 2026 (27 Sep 2026), dibandingkan
+file lain (DevFest 2025, Cloud Next 2026, JuaraGCP 2026, Cloud Roadshow,
+Templates, Master Data):
 
-- 56 tab tanpa index; tidak ada penanda tab mana aktif.
-- Skema kolom beda-beda per tab; sebagian rusak (header 5 kolom, data di kolom G).
+- File 2026: 57 tab tanpa index yang benar; tidak ada penanda tab mana aktif.
+- Tidak ada dimensi event di dalam data; **25+ tab isi 2025 masih menempel** di
+  file 2026 dan tidak bisa dibedakan dari data hidup tanpa baca sel satu-satu.
+- Skema kolom beda-beda antar file maupun antar tab; sebagian rusak (header 5
+  kolom, data nyasar ke kolom G).
 - 11 variasi status (`Not Started`, `Done`, `Completed`, `LUNAS`, `Aktif`,
   `In-Progress`, `On Progress`, `PROCESS`, `To do`, `Doing`, `TBC`).
-- Tab kembar + data 2025 bercampur di tab yang dianggap hidup.
 - Angka sama muncul di beberapa tab dengan nilai berbeda (target peserta 3 versi).
+- Satu orang punya dua record (`Commitee` 37 nama tanpa nomor vs `Final New
+  Volunteer` 33 nama dengan nomor); dedup manual terus-menerus.
+- Pembayaran (DP/remaining/due date) cuma kolom, bukan data yang bisa ditanya.
 
-Dampak: agent harus baca sel mentah, menebak tab/kolom, dan menyimpulkan arti
-nilai. Ini sumber error utama, dan output jadi tidak konsisten.
+Dampak: agent harus baca sel mentah, menebak file/tab/kolom, dan menyimpulkan
+arti nilai. Ini sumber error utama, dan output jadi tidak konsisten.
 
 ## 2. Tujuan
 
 1. Satu pintu pengambilan data: tool domain (`budget_summary`, dst.), bukan baca sel.
 2. Output terstruktur: field, tipe, enum status stabil walau kolom di sheet bergeser.
-3. Hilangkan kelas error "salah tab / salah kolom / pakai angka tahun lama".
+3. Hilangkan kelas error "salah event / salah tab / salah kolom / pakai data tahun lama".
 4. Satu sumber kebenaran per entitas; angka turunan dihitung formula, bukan
    diketik manual di banyak tempat.
-5. Spreadsheet yang bisa dibaca manusia tanpa panduan: layout rapi, warna
+5. Satu orang satu record: committee dan volunteer jadi satu `ORGANIZER`,
+   perbedaan peran diselesaikan lewat `ASSIGNMENT`.
+6. Spreadsheet yang bisa dibaca manusia tanpa panduan: layout rapi, warna
    konsisten, dropdown status, format uang/tanggal.
 
 ## 3. Non-Tujuan
@@ -58,15 +80,17 @@ Aturan wajib (feedback Kak Farhan):
   Tidak ada operasi tulis, rename, atau re-format di production.
 - **Development** = salinan spreadsheet di folder Drive terpisah. Semua
   perubahan skema, rename tab, formula, enum, dan uji coba tulis terjadi di sini.
-- Spreadsheet id tidak pernah di-hardcode: datang dari config per environment
-  (`SPREADSHEET_ID_DEV`, `SPREADSHEET_ID_PROD`). Default runtime = dev.
+- Spreadsheet id tidak pernah di-hardcode: datang dari config per event
+  (`PTX_SPREADSHEET_ID_<EVENT>`), di-resolve lewat katalog event di registry.
+  Default runtime = dev.
 - Akses levat **service account** yang di-share ke spreadsheet dev (Editor) dan
   production (Viewer). Kunci SA disimpan sebagai secret, tidak masuk repo.
 - Cutover dev → prod hanya setelah checklist verifikasi (bagian 12).
 
-Catatan status 27 Sep 2026: pembuatan salinan dev **tertunda** karena kuota
-Drive akun pemegang OAuth penuh (usage 16,32 GB dari limit 16,1 GB). Ini blocker
-operasional, bukan blocker desain; lihat bagian 13.
+Catatan status 27 Sep 2026: folder `DEV - Planning Trix (sandbox)` sudah dibuat
+(tampak kosong dari listing, perlu dicek isinya). Kuota Drive akun pemegang OAuth
+masih penuh (16,32 GB / 16,1 GB), jadi salinan dev belum bisa dibuat untuk semua
+event. Ini blocker operasional, bukan blocker desain; lihat bagian 13.
 
 ## 5. Pengguna
 
@@ -75,55 +99,67 @@ operasional, bukan blocker desain; lihat bagian 13.
 | Agent devfest (WhatsApp) | Jawab budget, status speaker, task telat |
 | Agent/divisi lain | Data terstruktur tanpa baca sheet |
 | Developer (Claude Code/Cursor) | Tool typed untuk eksplor data |
-| Kak Farhan | Audit cepat: angka mana 2025, mana bentrok |
+| Kak Farhan | Audit cepat: event mana, data mana yang bentrok |
 
 ## 6. User Story
 
-- Panggil `budget_summary` → total belanja, buffer, gap, baris, tanpa tahu nama tab.
-- Panggil `speaker_candidates{status:"Proses"}` → kandidat yang sedang dikontak.
-- Panggil `task_list{pic:"..."}` → task + deadline + status enum.
-- Panggil `planning_index` → tahu tab Aktif/Arsip sebelum menulis.
+- Panggil `event_catalog` → daftar event + folder + file trix-nya.
+- Panggil `budget_summary{event:"devfest26"}` → total belanja, buffer, gap, baris,
+  tanpa tahu nama tab.
+- Panggil `speaker_candidates{event:"devfest26", status:"Proses"}` → kandidat
+  yang sedang dikontak.
+- Panggil `organizer_list{event:"devfest26", position:"LO"}` → siapa saja yang
+  pegang posisi LO, lengkap dengan divisi dan nomor HP-nya.
+- Panggil `task_list{event:"devfest26", pic:"..."}` → task + deadline + status enum.
+- Panggil `planning_index{event:"devfest26"}` → tahu tab Aktif/Arsip sebelum menulis.
 - Developer pakai tool yang sama dari klien MCP lain.
 
 ## 7. Ruang Lingkup per Fase
 
 ### Fase 0 — Read-only (MVP)
 
-8 tool baca + index; semua mengembalikan JSON + ringkasan teks.
+10 tool baca + index; semua mengembalikan JSON + ringkasan teks, dan semua
+menerima `event` sebagai parameter wajib.
 
 | Tool | Isi | Entitas sumber |
 | --- | --- | --- |
-| `planning_index` | Daftar tab: status, pemilik, aksi | Index |
-| `budget_summary` | Baris, subtotal, buffer, gap, skenario | BudgetLine, BudgetSummary |
-| `ticket_summary` | Tier, harga, pax, total | TicketTier |
-| `sponsor_pipeline` | Paket, harga, potensi, prospek | SponsorPackage, SponsorProspect |
-| `speaker_candidates` | Kandidat + status kontak + PIC | SpeakerCandidate, SpeakerReference |
-| `task_list` | Task + PIC + deadline + status | Task |
-| `logistic_needs` | Kebutuhan + vendor + harga | LogisticNeed, Vendor |
-| `agenda_zona` | Rundown per zona | AgendaBlock |
+| `event_catalog` | Daftar event, folder, file | EVENT, PORTFOLIO |
+| `planning_index` | Daftar tab: kind, pemilik, aksi | EVENT_TAB |
+| `budget_summary` | Baris, subtotal, buffer, gap, skenario | BUDGET_LINE, BUDGET_SUMMARY |
+| `ticket_summary` | Tier, harga, pax, total | TICKET_TIER |
+| `partnership_pipeline` | Paket, harga, potensi, deal | SPONSOR_PACKAGE, PARTNERSHIP_DEAL, COMPANY |
+| `speaker_candidates` | Kandidat + status kontak + PIC | SPEAKER, SPEAKER_PIPELINE, SPEAKER_REFERENCE |
+| `task_list` | Task + PIC + deadline + status | TASK |
+| `organizer_list` | Orang + penugasan (committee/volunteer) | ORGANIZER, ASSIGNMENT, DIVISION |
+| `logistic_needs` | Kebutuhan + order + vendor + pembayaran | LOGISTIC_NEED, PURCHASE_ORDER, VENDOR, PAYMENT |
+| `agenda_zona` | Rundown per zona | AGENDA_BLOCK, SESSION, ZONA |
+| `risk_register` | Risiko + skor + mitigasi | RISK |
 
 ### Fase 1 — Write terbatas (dev dulu)
 
-- `task_upsert`, `speaker_status_update`, `budget_note_append`.
+- `task_upsert`, `speaker_status_update`, `organizer_assign`, `budget_note_append`.
 - Hanya ke environment dev sampai cutover disetujui.
 - Approval prompt untuk tulis; read auto.
+- Tulis ke event/tab bertipe `Arsip` atau `Draft` selalu ditolak.
 
 ### Fase 2 — Resource + sinkronisasi
 
-- MCP resource: `planning://index`, `planning://budget`, `planning://speaker`.
-- Sinkron terjadwal ke memori agent; deteksi konflik.
+- MCP resource: `planning://events`, `planning://<event>/index`,
+  `planning://<event>/budget`, `planning://<event>/speaker`.
+- Sinkron terjadwal ke memori agent; deteksi konflik lintas tab.
 
 ## 8. Kebutuhan Fungsional
 
-1. `planning_index` menandai tab: `Aktif | Referensi | Arsip`.
+1. `planning_index` menandai tab: `Aktif | Referensi | Arsip | Draft | Turunan`.
 2. Tool baca menolak tab arsip kecuali diminta eksplisit.
-3. Uang → integer IDR; tanggal → ISO `YYYY-MM-DD` (+ `raw`); status → enum kanonik
+3. Tool wajib menerima `event`; slug tak dikenal → `E_EVENT_UNKNOWN`.
+4. Uang → integer IDR; tanggal → ISO `YYYY-MM-DD` (+ `raw`); status → enum kanonik
    (+ `raw_status`).
-4. Nilai yang tak terpetakan → `unknown`, bukan ditebak.
-5. Respons menyertakan `source_tabs`, `rev`, `fetched_at`.
-6. Angka kunci beda antar tab → `conflicts[]`, jangan pilih sendiri.
-7. Angka turunan (subtotal/total/gap) dihitung formula di sheet; tool hanya membaca.
-8. Ringkasan teks bahasa Indonesia opsional (`format:"text"`).
+5. Nilai yang tak terpetakan → `unknown`, bukan ditebak.
+6. Respons menyertakan `event`, `source_tabs`, `rev`, `fetched_at`.
+7. Angka kunci beda antar tab → `conflicts[]`, jangan pilih sendiri.
+8. Angka turunan (subtotal/total/gap) dihitung formula di sheet; tool hanya membaca.
+9. Ringkasan teks bahasa Indonesia opsional (`format:"text"`).
 
 ## 9. Kebutuhan Non-Fungsional
 
@@ -139,15 +175,19 @@ operasional, bukan blocker desain; lihat bagian 13.
 
 ## 10. Standar Spreadsheet (produk)
 
-1. **Nama tab** straight-forward: kata benda biasa, tanpa `Draft`/`2026`.
-   Tahun hanya di tab arsip: `<Nama> (Arsip <tahun>)`.
-2. **Header block** 3 baris: judul + owner; rev + status data + sumber; kosong.
+1. **Nama tab** straight-forward untuk data hidup: kata benda biasa, tanpa
+   `Draft`/`2026`. Label arsip/draft/turunan hanya untuk yang memang bukan data
+   hidup: `<Nama> (Arsip <tahun>)`, `<Nama> (Draft)`, `<Nama> (Turunan <sumber>)`.
+2. **Header block** 3 baris: judul + nama event + owner; rev + status data +
+   sumber; kosong.
 3. **Status** dari satu enum; diinput lewat dropdown (data validation).
 4. **Formula** untuk semua angka turunan (SUM/SUMIF/ARRAYFORMULA); sel formula
    dibedakan warna dari sel input.
 5. **UX**: freeze header, format mata uang/tanggal, conditional formatting
    (telat/status), warna tab per divisi, index tab berisi link ke tiap tab.
 6. Satu fakta satu tempat; kolom PIC + Deadline wajib (`TBD` kalau belum ada).
+7. Satu orang satu record: tidak ada tabel orang kedua; peran diisi lewat
+   penugasan.
 
 Detail lengkap: `DATA-MODEL.md`.
 
@@ -180,20 +220,26 @@ Detail lengkap: `DATA-MODEL.md`.
 
 ## 14. Pertanyaan Terbuka
 
-1. Target peserta final 400 atau 500?
-2. Salinan dev ditaruh di mana (butuh kuota Drive / shared drive)?
+1. Target peserta final 400 (250 Dev + 150 Builder) atau 500?
+2. Salinan dev ditaruh di mana (folder `DEV - Planning Trix (sandbox)` sudah ada;
+   butuh kuota Drive / shared drive / akun lain)?
 3. Service account: pakai yang sudah ada atau bikin SA khusus `planning-trix`?
-4. Kapan rename tab production? (disarankan: setelah dev stabil + cutover plan)
-5. Format ringkasan WA: template tetap atau bebas?
+4. Kapan rename/pindah tab legacy production? (disarankan: setelah dev stabil +
+   cutover plan)
+5. Tab legacy 2025 di file 2026 dipindah ke file 2025 atau cukup ditandai
+   `(Arsip 2025)`?
+6. Apakah event lama (DevFest 2024, IWD, Roadshow, JuaraGCP) ikut dimodelkan
+   penuh, atau cukup didaftarkan di katalog tanpa registry tab?
+7. Format ringkasan WA: template tetap atau bebas?
 
 ## 15. Milestone
 
 | Fase | Isi | Estimasi |
 | --- | --- | --- |
-| P0 | Salinan dev + registry + 8 tool baca + tes + probe | 3-4 hari kerja |
-| P1 | 3 tool tulis + validasi + audit (dev) | 3-4 hari kerja |
+| P0 | Salinan dev + katalog event + registry + 10 tool baca + tes + probe | 4-5 hari kerja |
+| P1 | 4 tool tulis + validasi + audit (dev) | 3-4 hari kerja |
 | P2 | Resource + sinkron memori | 2 hari kerja |
-| P3 | Cutover prod + migrasi enum/formula | 2 hari kerja |
+| P3 | Cutover prod + migrasi enum/formula + normalisasi ORGANIZER | 3 hari kerja |
 
 ## 16. Out of Scope
 
@@ -201,3 +247,4 @@ Detail lengkap: `DATA-MODEL.md`.
 - Autentikasi baru selain service account.
 - UI/dashboard.
 - Integrasi Bevy/Goers/sistem eksternal lain.
+- Keputusan desain ulang struktur folder Drive panitia (tool hanya membaca).
