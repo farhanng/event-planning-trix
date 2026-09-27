@@ -1,0 +1,26 @@
+{
+  "portfolio": { "id": "gdgc-bdg", "name": "GDG Cloud Bandung" },
+  "events": [
+    { "slug": "devfest26", "name": "DevFest Cloud Bandung 2026", "jenis": "DevFest", "year": 2026, "folderId": "<FOLDER_DEVFEST26>", "spreadsheetIdEnv": "PTX_SPREADSHEET_ID_DEV", "active": true, "registryFile": "planning.devfest26.json" },
+    { "slug": "devfest25", "name": "DevFest Cloud Bandung 2025", "jenis": "DevFest", "year": 2025, "folderId": "<FOLDER_DEVFEST25>", "spreadsheetIdEnv": "PTX_SPREADSHEET_ID_PROD", "active": false },
+    { "slug": "master", "name": "Master Data (lintas event)", "jenis": null, "year": null, "folderId": "<FOLDER_VOLUNTEER>", "spreadsheetIdEnv": "PTX_SPREADSHEET_ID_MASTER", "active": true, "readOnly": true }
+  ],
+  "tabsByEvent": {
+    "devfest26": {
+      "Budget 2026 (Draft)": { "kind": "Aktif", "entity": "budget_line", "headerRow": 1, "columns": { "category": "A", "item": "B", "qty": "C", "unit": "D", "unit_price_idr": "E", "total_idr": "F", "note": "G" } },
+      "Budget 2026 - In Out": { "kind": "Turunan", "derivedFrom": "Budget 2026 (Draft)", "entity": "budget_summary", "headerRow": 1, "columns": { "type": "A", "source": "B", "nominal_idr": "C", "status": "D", "note": "E" } },
+      "Tiket 2026 (Draft)": { "kind": "Aktif", "entity": "ticket_tier", "headerRow": 1, "columns": { "tier": "A", "includes": "B", "price_idr": "C", "packages": "D", "pax": "E", "total_idr": "F", "note": "G" } },
+      "Target Partnership": { "kind": "Aktif", "entity": "partnership_deal", "headerRow": 1, "columns": { "company": "B", "pic": "C", "expected_idr": "D", "status": "E", "note_update": "F", "contact_person": "G" } },
+      "MEDIA PARTNER": { "kind": "Aktif", "entity": "partnership_deal", "headerRow": 1, "columns": { "company": "A", "category": "B", "social_url": "C", "email": "D", "phone": "E", "address": "F", "media_terms": "G" } },
+      "[LO] Speakers Candidate": { "kind": "Aktif", "entity": "speaker_pipeline", "headerRow": 1, "columns": { "person_name": "A", "topic": "B", "role_title": "C", "contact_pic": "D", "note": "E", "status": "F" } },
+      "General Task": { "kind": "Aktif", "entity": "task", "headerRow": 1, "columns": { "no": "A", "title": "B", "priority": "C", "pic": "D", "note": "E", "status": "F", "due_date": "G" } },
+      "Commitee": { "kind": "Aktif", "entity": "organizer", "headerRow": 1, "columns": { "name": "A", "pre_day_role": "B", "day_role": "C", "shirt_size": "D", "contact": "E" } },
+      "Final New Volunteer": { "kind": "Aktif", "entity": "organizer", "headerRow": 1, "columns": { "no": "A", "name": "B", "division": "C", "role": "D", "email": "E", "phone": "F", "occupation": "G" } },
+      "LOGISTIC": { "kind": "Aktif", "entity": "logistic_need", "headerRow": 1, "columns": { "no": "A", "sub_no": "B", "item": "C", "detail": "D", "vendor": "E", "qty": "F", "unit": "G", "unit_price_idr": "H", "total_idr": "I", "invoice_link": "J", "dp": "K", "remaining": "L", "full_payment_due_date": "M", "pic": "N", "note": "O", "status_bayar": "P" } },
+      "Timeline Acara 2026 (Draft)": { "kind": "Draft", "entity": "agenda_block", "headerRow": 1, "columns": { "zona": "A", "start": "B", "end": "C", "duration": "D", "interval": "E", "format": "F", "speaker": "G", "job_title": "H", "topic": "I", "asset": "J", "lo": "K", "note": "L" } },
+      "Risk Register": { "kind": "Aktif", "entity": "risk", "headerRow": 1, "columns": { "id": "A", "description": "B", "probability": "C", "impact": "D", "mitigation": "E", "owner": "F" } },
+      "Agenda": { "kind": "Arsip", "entity": "agenda_block_2025", "headerRow": 1, "columns": {} }
+    }
+  },
+  "checks": { "requireEventParam": true, "rejectWriteKinds": ["Arsip", "Draft"] }
+}

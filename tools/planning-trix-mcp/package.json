@@ -1,0 +1,23 @@
+{
+  "name": "planning-trix-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP server: one-door structured access to GDG Cloud Bandung Planning Trix",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test test/",
+    "coverage": "c8 --check-coverage --lines 100 --functions 100 --statements 100 --branches 100 --reporter=text --reporter=text-summary node --test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "google-auth-library": "^9.0.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "c8": "^10.1.0"
+  }
+}
