@@ -105,7 +105,7 @@ Aturan wajib (feedback Kak Farhan):
 Catatan status 27 Sep 2026 (rev 0.4): salinan dev sudah dibuat —
 `[DEV] Planning Trix - DevFest Cloud Bandung 2026 (sandbox)`,
 spreadsheet id `<SPREADSHEET_ID_DEV>`, 57 tab, owner
-farhan.naufal.g@gmail.com, folder `DEV - Planning Trix (sandbox)`
+<OWNER_EMAIL>, folder `DEV - Planning Trix (sandbox)`
 (`<FOLDER_DEV_SANDBOX>`). Kuota Drive sudah lega (4,23 GB dari
 15 GB), blocker kuota beres. Blocker berikutnya: pembuatan service account
 khusus `planning-trix`; gcloud di host login sebagai SA tanpa izin
