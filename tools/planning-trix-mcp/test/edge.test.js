@@ -29,26 +29,26 @@ test('planning_index skips non-object tab entries', async () => {
   assert.equal(out.data.tabs[1].kind, 'Aktif');
 });
 
-test('logistic_needs summary tolerates null qty', async () => {
-  const sheets = makeSheets({ LOGISTIC: [['h'], ['1', '', 'Item', '', 'V', '', 'set', '', '100', '', '', '', '', '', '', 'DP']] });
-  const out = await callTool('logistic_needs', { event: 'devfest26' }, makeCtx({ sheets }));
+test('lo_roster tolerates null contact', async () => {
+  const sheets = makeSheets({ 'Job on Stage 2026 (Clean)': [['b1'], ['b2'], ['b3'], ['b4'], ['No', 'Nama', 'Kontak', 'Asal', 'Peran LO', 'Status', 'Catatan'], ['1', 'Malendra', '', 'PDD-LO', 'Speaker Liaison', 'Aktif', '']] });
+  const out = await callTool('lo_roster', { event: 'devfest26' }, makeCtx({ sheets }));
   assert.equal(out.data.count, 1);
-  assert.match(out.summary[0], /x0/);
+  assert.equal(out.data.items[0].contact, null);
+  assert.match(out.summary[0], /Malendra/);
 });
 
-test('agenda_zona summary tolerates null format', async () => {
-  const sheets = makeSheets({ 'Timeline Acara 2026 (Draft)': [['h'], ['Main Hall', '09:00', '10:00', '', '', '', '', '', '', '', '', '']] });
-  const out = await callTool('agenda_zona', { event: 'devfest26' }, makeCtx({ sheets }));
+test('design_tasks summary tolerates null deadline', async () => {
+  const sheets = makeSheets({ 'Design Task': [['Design', 'Type', 'Designer', 'Status', 'Deadline', 'Note'], ['Poster', 'IG', 'Ghinna', 'On Progress', '', '']] });
+  const out = await callTool('design_tasks', { event: 'devfest26' }, makeCtx({ sheets }));
   assert.equal(out.data.count, 1);
-  assert.match(out.summary[0], /Main Hall 09:00-10:00/);
+  assert.match(out.summary[0], /Ghinna \| Proses \| TBD/);
 });
 
-test('risk_register tolerates null score in opsi min_score', async () => {
-  const sheets = makeSheets({ 'Risk Register': [['h'], ['R1', 'No score', '', '', '', '']] });
-  const out = await callTool('risk_register', { event: 'devfest26', min_score: 1 }, makeCtx({ sheets }));
-  assert.equal(out.data.count, 0);
-  const all = await callTool('risk_register', { event: 'devfest26' }, makeCtx({ sheets }));
-  assert.match(all.summary[0], /skor -/);
+test('objectives handles empty percentage', async () => {
+  const sheets = makeSheets({ 'Objectives': [['Objectives', 'Key Results (KR)', 'Sie Penanggung Jawab', 'Metrik dan Target', 'Target', 'Nilai', 'Percentage'], ['O1', 'KR 1.1', 'Humas', 'm', '85%', '', '']] });
+  const out = await callTool('objectives', { event: 'devfest26' }, makeCtx({ sheets }));
+  assert.equal(out.data.count, 1);
+  assert.match(out.summary[0], /KR 1.1 \| Humas \| -/);
 });
 
 test('cellAt handles undefined slot', () => {

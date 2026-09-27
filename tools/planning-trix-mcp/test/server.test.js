@@ -13,16 +13,16 @@ async function connected(ctx) {
   return client;
 }
 
-test('toolSpecs lists 11 tools', () => {
+test('toolSpecs lists 13 tools', () => {
   const specs = toolSpecs();
-  assert.equal(specs.length, 11);
+  assert.equal(specs.length, 13);
   assert.deepEqual(Object.keys(specs[0]).sort(), ['description', 'name', 'shape']);
 });
 
 test('server exposes tools over MCP', async () => {
   const client = await connected(makeCtx());
   const list = await client.listTools();
-  assert.equal(list.tools.length, 11);
+  assert.equal(list.tools.length, 13);
   assert.ok(list.tools.find((t) => t.name === 'budget_summary'));
 });
 

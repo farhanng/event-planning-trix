@@ -55,7 +55,7 @@ test('entry runs stdio server when executed directly', async () => {
     sendLine(child, { jsonrpc: '2.0', method: 'notifications/initialized' });
     sendLine(child, { jsonrpc: '2.0', id: 2, method: 'tools/list' });
     const list = await readLine(child);
-    assert.equal(list.result.tools.length, 11);
+    assert.equal(list.result.tools.length, 13);
     // Tutup stdin agar stdio transport menutup server -> exit rapi -> v8 coverage ter-flush.
     const exited = new Promise((resolve) => child.on('exit', resolve));
     child.stdin.end();

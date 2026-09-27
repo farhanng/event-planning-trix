@@ -38,7 +38,7 @@ test('callTool success envelope with meta', async () => {
   assert.equal(out.ok, true);
   assert.equal(out.meta.event, 'devfest26');
   assert.equal(out.meta.env, 'dev');
-  assert.deepEqual(out.meta.source_tabs, []);
+  assert.deepEqual(out.meta.source_tabs, ['General Task']);
   assert.ok(out.summary.length);
 
   const budget = await callTool('budget_summary', { event: 'devfest26' }, makeCtx());

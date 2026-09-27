@@ -78,13 +78,13 @@ Katalog event yang sudah terverifikasi (recon 27 Sep 2026):
 | slug | Event | Tahun | Folder Drive | Planning Trix (spreadsheet id) |
 | --- | --- | --- | --- | --- |
 | `devfest26` | DevFest Cloud Bandung | 2026 | `DevFest Cloud Bandung 2026` | `<SPREADSHEET_ID_DEVFEST26>` |
-| `devfest25` | DevFest Cloud Bandung | 2025 | `Devfest Cloud 2025` | `<SPREADSHEET_ID_DEVFEST25>` |
+| `devfest25` | DevFest Cloud Bandung | 2025 | `Devfest Cloud 2025` | `1jKDP4QaJ7E06aabeoFQfbnoamFAMvnfPThNx6Zo8MGs` |
 | `devfest24` | Cloud DevFest Bandung | 2024 | `Devfest Cloud Bandung 2024` | — (Liquidation + Tracking terpisah) |
-| `cloudnext26` | Cloud Next | 2026 | `Cloud Next 2026` | `<SPREADSHEET_ID_CLOUDNEXT26>` |
-| `juaragcp26` | JuaraGCP | 2026 | `#JuaraGCP 2026` | `<SPREADSHEET_ID_JUARAGCP26>` |
-| `roadshow` | Cloud Roadshow | 2025 | `Cloud Roadshow 2025` | `<SPREADSHEET_ID_ROADSHOW25>` |
+| `cloudnext26` | Cloud Next | 2026 | `Cloud Next 2026` | `1K4oq9k84fZcNYY2-JalzO3BIPQs3qBu9Hp5CsIy0ctA` |
+| `juaragcp26` | JuaraGCP | 2026 | `#JuaraGCP 2026` | `1e2qtVfBpQy1xp3t_48DMciGAHVT4-psdU2zDPI4EMrE` |
+| `roadshow` | Cloud Roadshow | 2025 | `Cloud Roadshow 2025` | `1zwvhTZStXoTe-VcY93Nam7U65uuVINMaDQuBgy22pXM` |
 | `iwd25` | IWD (WTM) | 2025 | `IWD 2025` | — |
-| `master` | Master Data (lintas event) | — | `Volunteer` | `<SPREADSHEET_ID_MASTER>` |
+| `master` | Master Data (lintas event) | — | `Volunteer` | `1PtrKR8nrnSwauIxBRTx_ewjL-E6_qjYC0Ru_bwte3_E` |
 
 Total: **2 event 2026 (DevFest + Cloud Next + JuaraGCP), 2 event 2025, 1 event
 2024**; template resmi di folder `Templates` (Event Planner List + Asset

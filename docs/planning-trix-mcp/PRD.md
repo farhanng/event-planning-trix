@@ -106,7 +106,7 @@ Catatan status 27 Sep 2026 (rev 0.4): salinan dev sudah dibuat —
 `[DEV] Planning Trix - DevFest Cloud Bandung 2026 (sandbox)`,
 spreadsheet id `<SPREADSHEET_ID_DEV>`, 57 tab, owner
 <OWNER_EMAIL>, folder `DEV - Planning Trix (sandbox)`
-(`<FOLDER_DEV_SANDBOX>`). Kuota Drive sudah lega (4,23 GB dari
+(`1AeX9vJSwmOUfxr1Gh9z_rBQwQzyrbHwX`). Kuota Drive sudah lega (4,23 GB dari
 15 GB). Service account khusus sudah ada:
 `<SA_PLANNING_TRIX>`, di-share
 Editor ke dev dan Viewer ke prod; kunci di secret store luar repo

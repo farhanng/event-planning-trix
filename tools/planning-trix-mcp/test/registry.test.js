@@ -19,7 +19,7 @@ test('listEvents', () => {
   const out = listEvents(makeRegistry());
   assert.equal(out.length, 3);
   assert.deepEqual(Object.keys(out[0]).sort(), ['active', 'folder_id', 'has_registry', 'jenis', 'name', 'slug', 'spreadsheet_env', 'year']);
-  assert.equal(out[0].has_registry, true);
+  assert.equal(out[0].has_registry, false);
 });
 
 test('resolveEvent', () => {
@@ -32,6 +32,7 @@ test('resolveEvent', () => {
 test('tabsForEvent + findTab', () => {
   const reg = makeRegistry();
   assert.equal(Object.keys(tabsForEvent(reg, 'devfest26')).length, Object.keys(TABS).length);
+  assert.equal(validateTabKind(TABS['Budget 2026 (Draft)']), true);
   const regNoTabs = makeRegistry({ tabsByEvent: {} });
   assert.throws(() => tabsForEvent(regNoTabs, 'devfest26'), /tidak punya registry tab/);
   assert.equal(findTab(reg, 'devfest26', 'General Task').kind, 'Aktif');
