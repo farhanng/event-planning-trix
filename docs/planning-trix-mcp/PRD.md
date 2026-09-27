@@ -107,10 +107,10 @@ Catatan status 27 Sep 2026 (rev 0.4): salinan dev sudah dibuat —
 spreadsheet id `<SPREADSHEET_ID_DEV>`, 57 tab, owner
 <OWNER_EMAIL>, folder `DEV - Planning Trix (sandbox)`
 (`<FOLDER_DEV_SANDBOX>`). Kuota Drive sudah lega (4,23 GB dari
-15 GB), blocker kuota beres. Blocker berikutnya: pembuatan service account
-khusus `planning-trix`; gcloud di host login sebagai SA tanpa izin
-`iam.serviceAccounts.create`, jadi SA dibuat lewat console atau dengan
-kredensial OAuth pemilik project.
+15 GB). Service account khusus sudah ada:
+`<SA_PLANNING_TRIX>`, di-share
+Editor ke dev dan Viewer ke prod; kunci di secret store luar repo
+(`~/.openclaw/secrets/planning-trix-sa.json`), diuji read+write lewat SA.
 
 ## 5. Pengguna
 
@@ -232,7 +232,7 @@ Detail lengkap: `DATA-MODEL.md`.
 | Risiko | Dampak | Mitigasi |
 | --- | --- | --- |
 | Skema sheet berubah, registry tidak ikut | Baca kolom salah | Registry satu sumber + tes kontrak + `mcp doctor --probe` |
-| Quota Drive penuh (status 27 Sep) | Tidak bisa buat salinan dev | Free up quota / shared drive / akun lain |
+| Quota Drive penuh (status 27 Sep) | Tidak bisa buat salinan dev | Selesai: kuota dibersihkan, salinan dev dibuat |
 | SA key bocor | Akses data | Secret store, scope minimum, rotasi key |
 | Tulis merusak data | Data rusak | Dev-only + validasi + approval + read-back + audit |
 | Sumber masih kotor | Output ambigu | `conflicts[]`, jangan menebak |
@@ -245,7 +245,9 @@ Diputuskan Kak Farhan 27 Sep 2026, 23:15:
 1. **Target peserta final = 500** (label `Overview` yang "400 (TBC)" ikut
    disesuaikan saat dev).
 2. **Salinan dev sudah dibuat** di folder `DEV - Planning Trix (sandbox)`.
-3. **Service account khusus `planning-trix`** dibuat (bukan SA lama).
+3. **Service account khusus `planning-trix`** sudah dibuat dan di-share:
+   `<SA_PLANNING_TRIX>` (Editor di
+   dev, Viewer di prod).
 4. **Rename/pindah tab legacy production: setelah dev stabil**, ikut cutover plan.
 5. **Production dibangun ulang sebagai file baru** (bukan bersih-bersih file
    2026). Data hidup dimigrasikan ke prod baru saat cutover; data 2025 di file
