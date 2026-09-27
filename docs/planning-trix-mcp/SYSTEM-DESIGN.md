@@ -298,8 +298,10 @@ openclaw mcp doctor planning-trix --probe
 2. `EVENT_TAB.kind` wajib; tab tanpa kind ditolak jalur tulis dan diberi warning
    di `planning_index`.
 3. Data lama yang masih menempel di file baru (kasus sekarang: 25+ tab legacy
-   2025 di file 2026) dipindah ke folder 2025 miliknya atau ditandai
-   `(Arsip 2025)` — keputusan Kak Farhan, lihat PRD bagian 14.
+   2025 di file 2026) **tidak dipindah manual ke file 2025**. Keputusan Kak
+   Farhan 27 Sep 2026: **production baru dibangun ulang** dari standar (file
+   baru), lalu data hidup 2026 dimigrasikan saat cutover; file lama dibiarkan
+   apa adanya. Dev dipakai untuk uji tulis. Lihat PRD bagian 14.
 4. Referensi lintas event (Master Data volunteer, Asset Inventory, Templates)
    dibaca dari registry `master` dan bersifat read-only.
 5. Template resmi (folder `Templates`) dijadikan `TEMPLATE_REFERENCE`, bukan

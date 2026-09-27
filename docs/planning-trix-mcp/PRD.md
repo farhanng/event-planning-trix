@@ -1,8 +1,23 @@
 # PRD — Planning Trix Data Gateway (MCP)
 
-- Status: Draft 0.3
-- Versi: 0.3 (revisi dari 0.2)
+- Status: Draft 0.4
+- Versi: 0.4 (revisi dari 0.3)
 - Tanggal: 27 Sep 2026
+
+Perubahan 0.4 (keputusan Kak Farhan 27 Sep 2026, 23:15):
+
+1. **Production dibangun ulang sebagai file baru**, bukan bersih-bersih file
+   lama. File 2026 sekarang tetap jadi sumber data 2026; data hidup dimigrasikan
+   ke prod baru saat cutover. Salinan dev = sandbox uji skema baru.
+2. **Target peserta final = 500.** Angka selaras di judul Budget/Tiket; label
+   `Overview` yang "400 (TBC)" ikut disesuaikan saat dev.
+3. **Salinan dev sudah dibuat**: `[DEV] Planning Trix - DevFest Cloud Bandung
+   2026 (sandbox)` di folder `DEV - Planning Trix (sandbox)`.
+4. **Service account khusus `planning-trix`** (bukan SA yang sudah ada).
+5. **Rename/pindah tab legacy: setelah dev stabil**, ikut cutover plan.
+6. **Event lama (2024, IWD, Roadshow, JuaraGCP): katalog saja**, tanpa registry
+   tab; modul penuh hanya DevFest 2026.
+7. Ringkasan WA: belum diputuskan (lihat bagian 14).
 - Owner: Kak Farhan
 - Penulis: DevFest AI
 - Target: MCP server `planning-trix`
@@ -87,10 +102,15 @@ Aturan wajib (feedback Kak Farhan):
   production (Viewer). Kunci SA disimpan sebagai secret, tidak masuk repo.
 - Cutover dev → prod hanya setelah checklist verifikasi (bagian 12).
 
-Catatan status 27 Sep 2026: folder `DEV - Planning Trix (sandbox)` sudah dibuat
-(tampak kosong dari listing, perlu dicek isinya). Kuota Drive akun pemegang OAuth
-masih penuh (16,32 GB / 16,1 GB), jadi salinan dev belum bisa dibuat untuk semua
-event. Ini blocker operasional, bukan blocker desain; lihat bagian 13.
+Catatan status 27 Sep 2026 (rev 0.4): salinan dev sudah dibuat —
+`[DEV] Planning Trix - DevFest Cloud Bandung 2026 (sandbox)`,
+spreadsheet id `<SPREADSHEET_ID_DEV>`, 57 tab, owner
+farhan.naufal.g@gmail.com, folder `DEV - Planning Trix (sandbox)`
+(`<FOLDER_DEV_SANDBOX>`). Kuota Drive sudah lega (4,23 GB dari
+15 GB), blocker kuota beres. Blocker berikutnya: pembuatan service account
+khusus `planning-trix`; gcloud di host login sebagai SA tanpa izin
+`iam.serviceAccounts.create`, jadi SA dibuat lewat console atau dengan
+kredensial OAuth pemilik project.
 
 ## 5. Pengguna
 
@@ -118,7 +138,7 @@ event. Ini blocker operasional, bukan blocker desain; lihat bagian 13.
 
 ### Fase 0 — Read-only (MVP)
 
-10 tool baca + index; semua mengembalikan JSON + ringkasan teks, dan semua
+11 tool baca + index; semua mengembalikan JSON + ringkasan teks, dan semua
 menerima `event` sebagai parameter wajib.
 
 | Tool | Isi | Entitas sumber |
@@ -218,31 +238,37 @@ Detail lengkap: `DATA-MODEL.md`.
 | Sumber masih kotor | Output ambigu | `conflicts[]`, jangan menebak |
 | Formula rusak saat copy | Angka salah | Verifikasi angka dev vs prod sebelum cutover |
 
-## 14. Pertanyaan Terbuka
+## 14. Keputusan (eks Pertanyaan Terbuka)
 
-1. Target peserta final 400 (250 Dev + 150 Builder) atau 500?
-2. Salinan dev ditaruh di mana (folder `DEV - Planning Trix (sandbox)` sudah ada;
-   butuh kuota Drive / shared drive / akun lain)?
-3. Service account: pakai yang sudah ada atau bikin SA khusus `planning-trix`?
-4. Kapan rename/pindah tab legacy production? (disarankan: setelah dev stabil +
-   cutover plan)
-5. Tab legacy 2025 di file 2026 dipindah ke file 2025 atau cukup ditandai
-   `(Arsip 2025)`?
-6. Apakah event lama (DevFest 2024, IWD, Roadshow, JuaraGCP) ikut dimodelkan
-   penuh, atau cukup didaftarkan di katalog tanpa registry tab?
-7. Format ringkasan WA: template tetap atau bebas?
+Diputuskan Kak Farhan 27 Sep 2026, 23:15:
+
+1. **Target peserta final = 500** (label `Overview` yang "400 (TBC)" ikut
+   disesuaikan saat dev).
+2. **Salinan dev sudah dibuat** di folder `DEV - Planning Trix (sandbox)`.
+3. **Service account khusus `planning-trix`** dibuat (bukan SA lama).
+4. **Rename/pindah tab legacy production: setelah dev stabil**, ikut cutover plan.
+5. **Production dibangun ulang sebagai file baru** (bukan bersih-bersih file
+   2026). Data hidup dimigrasikan ke prod baru saat cutover; data 2025 di file
+   2026 tidak dipindah manual.
+6. **Event lama (DevFest 2024, IWD, Roadshow, JuaraGCP): katalog saja**, tanpa
+   registry tab. Modul penuh hanya DevFest 2026.
+7. **Format ringkasan WA: template tetap** — ringkasan teks dari tool MCP
+   (mis. `budget_summary`) dipakai konsisten supaya mudah dibaca panitia dan
+   tidak berubah-ubah tiap jawaban.
 
 ## 15. Milestone
 
 | Fase | Isi | Estimasi |
 | --- | --- | --- |
-| P0 | Salinan dev + katalog event + registry + 10 tool baca + tes + probe | 4-5 hari kerja |
+| P0 | Salinan dev + katalog event + registry + 11 tool baca + tes + probe | 4-5 hari kerja |
 | P1 | 4 tool tulis + validasi + audit (dev) | 3-4 hari kerja |
 | P2 | Resource + sinkron memori | 2 hari kerja |
 | P3 | Cutover prod + migrasi enum/formula + normalisasi ORGANIZER | 3 hari kerja |
 
 ## 16. Out of Scope
 
+- Bersih-bersih file production lama (yang lama dibiarkan apa adanya;
+  production baru dibangun dari standar).
 - Migrasi/normalisasi production sebelum dev stabil.
 - Autentikasi baru selain service account.
 - UI/dashboard.

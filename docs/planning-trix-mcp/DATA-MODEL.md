@@ -641,10 +641,16 @@ catatan + `REVISION_LOG`.
 
 ## 9. Rencana migrasi (dev dulu, production tidak disentuh)
 
-1. Buat **salinan dev** spreadsheet 2026 di folder `DEV - Planning Trix (sandbox)`.
-   Blocker saat ini: kuota Drive penuh (16,32 GB / 16,1 GB).
+Keputusan Kak Farhan 27 Sep 2026: **production dibangun ulang sebagai file
+baru**, bukan bersih-bersih file 2026. Jadi dekomposisi tab di bawah dijalankan
+di dev sebagai target skema; saat cutover, data hidup 2026 dipindahkan ke prod
+baru, file lama dibiarkan sebagai arsip.
+
+1. **Salinan dev sudah dibuat**: `[DEV] Planning Trix - DevFest Cloud Bandung
+   2026 (sandbox)` (57 tab) di folder `DEV - Planning Trix (sandbox)`.
 2. Bikin `EVENT` + `EVENT_TAB` per file, termasuk peta 8 event di bagian 2
-   (tabel katalog). Tolak jalur tulis untuk tab tanpa kind.
+   (tabel katalog). Tolak jalur tulis untuk tab tanpa kind. Event lama (2024,
+   IWD, Roadshow, JuaraGCP) **katalog saja**, tanpa registry tab.
 3. Normalisasi `ORGANIZER`: gabung `Commitee` (37 nama, 0 HP) + `Final New
    Volunteer` (33 nama, 32 HP) → satu entitas, dedup by email; `ASSIGNMENT`
    menampung peran Pre Day/The Day.
@@ -655,13 +661,13 @@ catatan + `REVISION_LOG`.
 6. Satukan 3 tab size T-Shirt jadi `SHIRT_SIZE`.
 7. Ubah kolom turunan jadi formula (bagian 6); hapus nilai manual.
 8. Migrasi status lama → enum; tambah dropdown + conditional formatting.
-9. Tandai tab legacy (`Agenda`, `Venue List`, `LOGISTIC`, `Task OBJ 1/3`,
-   `Doorprize`, `Speaker Question`, `Agenda for App`, `Timeline`, `Copy of
-   Timeline`, `Event Task`, `Task Management`, `Old Task Template`, `Report`,
-   `Design Task`, `Dokumentasi`, `JOBDESK DOKUM HARI-H`, `Redeem & Point`,
-   `LOGISTIC - Size T-Shirt *`, `LOGISTIC - TRACK`, `LOGISTIC - NEEDS`,
-   `Venue Candidate`, `Agenda Disparbud`, `DevFest 2023 - Speaker`) jadi
-   `(Arsip 2025)` / `REF -` / `Turunan`, atau pindah ke file 2025.
-10. Validasi: angka dev = angka prod untuk data 2026; 0 tab tanpa kind; 0 nilai
+   Target peserta = **500** (selaraskan label `Overview` yang "400 (TBC)").
+9. Tab yang tidak ikut ke prod baru: `Agenda`/`Agenda Disparbud`, `Venue List`,
+   `Venue Candidate`, `Task OBJ 1/3`, `Doorprize`, `Speaker Question`,
+   `Redeem & Point`, `Dokumentasi`, `JOBDESK DOKUM HARI-H`, `Event Task`,
+   `Task Management`, `Old Task Template`, `Report`, `DevFest 2023 - Speaker`,
+   `Job on Stage 2025 (Backup)`, `Copy of Timeline`; tab size T-Shirt 2025 dan
+   `LOGISTIC - TRACK` 2025 tidak dimigrasikan (data 2025).
+10. Validasi: angka prod baru = angka data hidup 2026; 0 tab tanpa kind; 0 nilai
     di luar enum.
 11. Cutover setelah approval (PRD bagian 12).
