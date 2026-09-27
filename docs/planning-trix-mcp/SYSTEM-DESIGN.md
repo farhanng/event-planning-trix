@@ -1,320 +1,324 @@
 # System Design — Planning Trix Data Gateway (MCP)
 
-- Status: Draft
-- Versi: 0.1
+- Status: Draft 0.2 (revisi dari 0.1)
 - Tanggal: 27 Sep 2026
-- Pasangan dokumen: `PRD.md`
+- Pasangan: `PRD.md`, `DATA-MODEL.md`
+
+Perubahan 0.2: backend pindah dari `gws` CLI ke **Google Sheets API v4 + service
+account**; aturan environment dev/prod; nama tab straight-forward; angka turunan
+via formula; tambahan data plan + clean code structure.
 
 ---
 
 ## 1. Konteks & Constraint
 
-- Sumber data: Google Sheets Planning Trix
-  `<SPREADSHEET_ID>` (56 tab).
-- Akses yang sudah ada: CLI `gws` v0.22.5 di `~/.local/bin/gws`, OAuth Kak
-  Farhan. Tidak ada kredensial tambahan yang diinginkan.
-- Host: mesin yang sama dengan Gateway OpenClaw (`farhan-GL503VM`).
-- OpenClaw mendukung MCP server lewat `mcp.servers` (transport stdio,
-  Streamable HTTP, SSE). Server dikelola via `openclaw mcp add/list/probe/doctor`.
-- Constraint: sesedikit mungkin moving parts; tidak menambah DB atau service
-  jaringan baru di fase awal.
+- Sumber data: Google Sheets Planning Trix. Dua environment:
+  - **prod** = spreadsheet panitia (read-only untuk tooling).
+  - **dev** = salinan di folder Drive terpisah (semua perubahan di sini).
+- Akses: **service account** + Google Sheets API v4. `gws` CLI tidak dipakai lagi.
+- Host: mesin Gateway OpenClaw (`farhan-GL503VM`).
+- OpenClaw memakai `mcp.servers` (stdio / Streamable HTTP / SSE) untuk MCP.
+- Constraint: tanpa DB/service jaringan baru di fase awal; sesedikit mungkin
+  moving parts; secret tidak masuk repo.
+
+Status 27 Sep 2026: pembuatan salinan dev tertunda karena kuota Drive akun
+pemegang OAuth penuh. Butuh kuota tambahan / shared drive / akun lain.
 
 ## 2. Keputusan Arsitektur
 
 | # | Keputusan | Alasan | Alternatif ditolak |
 | --- | --- | --- | --- |
-| D1 | MCP server **stdio**, bukan HTTP | 1 host, tanpa port/TLS, lifecycle ikut Gateway | HTTP (butuh auth + expose port) |
-| D2 | Backend = subprocess `gws` | Pakai OAuth yang sudah ada, tanpa SDK Google baru | Google API client langsung (kredensial baru) |
-| D3 | Registry JSON sebagai satu sumber pemetaan | Kolom beda per tab; jangan hardcode di kode/prompt | Hardcode per tool (rapuh) |
-| D4 | Read-only dulu | Menghilangkan risiko data rusak | Langsung read+write (risiko tinggi) |
-| D5 | Normalisasi di server, bukan di agent | Enum/tanggal/uang konsisten di semua klien | Normalisasi di prompt (tidak konsisten) |
-| D6 | Lapor `conflicts[]`, tidak menebak | Sumber masih kotor (angka bentrok) | Auto-pilih nilai pertama (bahaya) |
+| D1 | MCP server **stdio** | 1 host, tanpa port/TLS, lifecycle ikut Gateway | HTTP (perlu auth + expose port) |
+| D2 | **Sheets API v4 + service account** | Tanpa CLI shell, typed client, retry/error native, mudah dites | `gws` CLI (parsing stdout rapuh, quirk keyring, `--json @file`) |
+| D3 | **Registry** JSON sebagai satu sumber pemetaan | Kolom beda per tab; jangan hardcode | Hardcode per tool |
+| D4 | **Dev/prod terpisah**; write dev-only | Production tidak boleh kena | Edit langsung di prod |
+| D5 | Read-only dulu (Fase 0) | Hilangkan risiko data rusak | Langsung read+write |
+| D6 | Normalisasi di server, bukan agent | Enum/tanggal/uang konsisten | Normalisasi di prompt |
+| D7 | Lapor `conflicts[]`, tidak menebak | Sumber masih kotor | Auto-pilih nilai pertama |
+| D8 | Angka turunan = **formula sheet** | Satu benar satu tempat; tool hanya baca | Hitung turunan di server (bisa beda dari sheet) |
+| D9 | Kode berlapis **domain/infra/app** | Clean code, mudah tes, mudah ganti sumber | Satu file besar |
 
 ## 3. Arsitektur
 
 ```
-                 +---------------------------+
- klien MCP        |  Claude Code / Cursor /   |
- (banyak)         |  agent devfest            |
-                 +-------------+-------------+
-                               | MCP (stdio)
-                               v
-                 +---------------------------+
-                 |   planning-trix MCP server |
-                 |---------------------------|
-                 | tools/    index.js         |
-                 | registry/ planning.json    |
-                 | adapters/ gws.js           |
-                 | normalize/ status|money|date|
-                 | validate/ write-rules.js   |
-                 | audit/    log.jsonl        |
-                 +-------------+-------------+
-                               | exec (stdin/args, JSON out)
-                               v
-                 +---------------------------+
-                 |   gws CLI  (OAuth Kak Farhan)|
-                 +-------------+-------------+
-                               | HTTPS
-                               v
-                 +---------------------------+
-                 |  Google Sheets Planning   |
-                 |  Trix (56 tab)            |
-                 +---------------------------+
+            +-------------------------------+
+ klien MCP  |  Claude Code / Cursor /       |
+ (banyak)   |  agent devfest                |
+            +---------------+---------------+
+                            | MCP (stdio)
+                            v
+            +-------------------------------+
+            |  planning-trix MCP server     |
+            |-------------------------------|
+            | app/       tool handlers      |
+            | domain/    entities, enums,   |
+            |            rules, normalizers |
+            | infra/     sheets-client,     |
+            |            registry, cache    |
+            | config/    env, secrets       |
+            | observability/ logger, audit  |
+            +---------------+---------------+
+                            | googleapis (Sheets v4)
+                            v
+            +-------------------------------+
+            |  Google Sheets API v4         |
+            |  (service account)            |
+            +---------------+---------------+
+                            |
+          +-----------------+-----------------+
+          v                                   v
+  dev spreadsheet                      prod spreadsheet
+  (editor, write ok)                   (viewer, read-only)
 ```
 
-Agent tidak pernah membaca sel mentah. Ia memanggil tool domain dan menerima
-objek ternormalisasi.
+Lapisan (clean code):
+
+- **domain**: entitas, enum, aturan bisnis, normalizer murni (tanpa I/O).
+- **infra**: `SheetsClient` (bikin API call), `RegistryRepository`, cache.
+- **app**: tool handler MCP, validasi input, rakit output.
+- **config**: environment, env var, pembacaan secret.
+- **observability**: logger terstruktur, audit log.
+
+Arah dependensi satu arah: `app → domain`, `app → infra`, `infra → domain`.
+Domain tidak pernah import infra (bisa dites tanpa jaringan).
 
 ## 4. Komponen
 
-### 4.1 MCP Server (entry)
+### 4.1 SheetsClient (`infra/sheets/SheetsClient.js`)
 
-- Runtime: Node ≥ 22 (host punya v26). SDK `@modelcontextprotocol/sdk`
-  (sudah tersedia di instalasi OpenClaw, tapi repo membawa dependensi sendiri).
-- Transport: stdio.
-- Tanggung jawab: registrasi tool, validasi input (schema), pemanggilan
-  adapter, normalisasi, perakitan output, pembentukan error.
+- Bungkus `googleapis` client (`sheets_v4.Sheets`).
+- Auth: `GoogleAuth` dengan service-account key dari secret (bukan literal).
+- Scope minimum: `https://www.googleapis.com/auth/spreadsheets.readonly` (Fase 0),
+  `.../spreadsheets` untuk tulis (Fase 1).
+- API yang dipakai: `spreadsheets.get` (metadata tab), `spreadsheets.values.batchGet`,
+  `spreadsheets.values.update`/`clear`, `spreadsheets.batchUpdate` (format).
+- Retry dengan exponential backoff + jitter untuk 429/5xx (pakai
+  `google-auth-library`/`gaxios` bawaan, atau wrapper sendiri). Tidak retry 4xx validasi.
+- Timeout per request; batasi ukuran respons; batching lintas tab dalam satu
+  `batchGet`.
 
-### 4.2 Registry (`registry/planning.json`)
+Contoh bentuk (pseudo):
 
-Satu file memetakan tab → entitas, header, kolom, enum, dan status arsip.
-Kode tool membaca registry, bukan menulis indeks kolom.
-
-```json
-{
-  "spreadsheetId": "<SPREADSHEET_ID>",
-  "statusEnum": ["Belum Mulai","Proses","Terblokir","Selesai","Batal","N/A"],
-  "statusMap": {
-    "Not Started": "Belum Mulai", "To do": "Belum Mulai",
-    "In-Progress": "Proses", "In Progress": "Proses",
-    "On Progress": "Proses", "PROCESS": "Proses", "Doing": "Proses",
-    "Done": "Selesai", "Completed": "Selesai",
-    "LUNAS": "Selesai", "Aktif": "Selesai"
-  },
-  "tabs": [
-    {
-      "title": "Budget 2026 (Draft)",
-      "kind": "Aktif",
-      "entity": "budget_line",
-      "headerRow": 4,
-      "revRow": 2,
-      "columns": {
-        "category": "A", "item": "B", "qty": "C", "unit": "D",
-        "unit_price": "E", "total": "F", "note": "G"
-      }
-    },
-    {
-      "title": "[LO] Speakers Candidate",
-      "kind": "Aktif",
-      "entity": "speaker_candidate",
-      "headerRow": 1,
-      "columns": {
-        "name": "A", "topic": "B", "role": "C", "pic": "D",
-        "notes": "E", "status": "F"
-      }
-    }
-  ]
+```js
+class SheetsClient {
+  constructor({ auth, spreadsheetId }) { /* ... */ }
+  async getSheetMeta() { /* titles + sheetId + grid */ }
+  async batchGet(ranges, valueRenderOption = 'FORMATTED_VALUE') { /* ... */ }
+  async update(range, values, { raw = true } = {}) { /* ... */ }
+  async clear(range) { /* ... */ }
 }
 ```
 
-Catatan: `spreadsheetId` di atas diisi saat implementasi; jangan hardcode di
-kode tool. Tab ber-`kind: "Arsip"` ditolak jalur tulis.
+### 4.2 RegistryRepository (`infra/registry/`)
 
-### 4.3 Adapter `gws.js`
+- Baca `registry/planning.json` sekali, validasi skema (zod), expose lookup
+  `byEntity()` / `byTab()`.
+- Registry: satu baris per tab → `{ title, kind, entity, headerRow, revRow, columns }`.
+- `kind: Aktif | Referensi | Arsip`. Tab `Arsip` ditolak jalur tulis.
+- Validasi saat start: setiap tab di registry ada di sheet; kalau tidak →
+  warning, bukan crash.
 
-- `batchGet(tabs, a1)` → satu panggilan untuk banyak tab.
-- `update(tab, range, values)` → jalur tulis.
-- Menangani quirk `gws` (terverifikasi di skill):
-  - Buang baris `Using keyring backend: keyring` sebelum `JSON.parse`.
-  - Error API: parse hanya objek `{...}` pertama (`raw_decode`), baca pesan
-    dari `error[api]` / `error[validation]`.
-  - `--params` untuk query, `--json` untuk body. `--json @file` tidak didukung.
-  - `valueInputOption: RAW` supaya nomor telepon berawalan `+` tidak jadi angka; `USER_ENTERED`
-    merusak nomor telepon.
-- Retry terbatas (2x) untuk error jaringan; tidak retry untuk error validasi.
+### 4.3 Normalizer (`domain/normalize/`, pure)
 
-### 4.4 Normalizer
+- `normalizeStatus(raw, enum, map)` → enum kanonik + `raw_status`.
+- `normalizeMoney(v)` → integer IDR (terima `57000000` dan `"Rp28.000.000"`).
+- `normalizeDate(v)` → `YYYY-MM-DD` + `raw` + flag `ambiguous`.
+- `normalizePhone(v)` → `+62 ...` (tiga format lama dinormalkan).
+- `normalizeBoolean(v)` → `Ya` / `Tidak`.
+- Semua fungsi murni, tanpa I/O → tes unit murah.
 
-- `status`: map via `statusMap`; tak dikenal → `unknown` + `raw_status`.
-- `money`: `"Rp28.000.000"` / `57000000` → integer IDR.
-- `date`: `9/5`, `05/12/2025`, `28 Nov 2026`, ISO → `YYYY-MM-DD` + `raw`.
-  Format ambigu (`9/5`) ditandai `ambiguous: true`, tidak ditebak.
-- `phone`: `6281200000000` / `(+62) 812-...` / `+62812-...` → `+62 812-0000-0000`.
-- `bool`: `TRUE/FALSE` → `Ya/Tidak`.
+### 4.4 Tool handlers (`app/tools/`)
 
-### 4.5 Validator (jalur tulis, Fase 1)
+- Satu file per tool; tiap handler: validasi input (zod) → panggil repo/client →
+  normalisasi → rakit `{ok, data, meta}`.
+- Tidak ada akses sheet langsung di handler; lewat composable service
+  (`BudgetService`, `SpeakerService`, dst.) supaya logika domain bisa dipakai
+  ulang dan dites tanpa MCP.
 
-- Tolak tab `kind: "Arsip"`.
-- `status` wajib ada di enum kanonik.
-- `PIC` dan `deadline` wajib (boleh `TBD`, tapi harus eksplisit).
-- Wajib read-back range target setelah tulis.
-- Wajib update `Rev.` di baris 2 + tambah catatan revisi ber-nomor.
-- Clear blok sebelum tulis (hindari sel sisa) dan pad semua baris ke lebar blok.
+### 4.5 Validator tulis (`domain/rules/`, Fase 1)
 
-### 4.6 Audit log
+- Tolak tab `Arsip`.
+- Status wajib enum; nilai luar enum ditolak.
+- PIC + deadline wajib (`TBD` eksplisit boleh).
+- Wajib read-back range target; wajib update `Rev.`; wajib catatan revisi.
+- Clear blok sebelum tulis; pad semua baris ke lebar blok.
 
-- JSONL append-only: `{ts, tool, args, tabs, ranges, before, after, result}`.
-- Lokasi: `var/audit/planning-trix.jsonl` (di-gitignore, hanya lokal).
+### 4.6 Observability (`observability/`)
 
-## 5. Kontrak Tool (Fase 0)
+- Logger JSON terstruktur: `{ts, level, tool, durationMs, rows, warnings, conflicts}`.
+- Audit log JSONL append-only untuk operasi tulis:
+  `{ts, env, tool, args, ranges, before, after, result}`.
+- Lokasi `var/audit/planning-trix.jsonl` (gitignored, lokal).
 
-Semua tool mengembalikan bentuk seragam:
+## 5. Environment & Konfigurasi
+
+Env var:
+
+| Nama | Isi |
+| --- | --- |
+| `PTX_ENV` | `dev` (default) atau `prod` |
+| `PTX_SPREADSHEET_ID_DEV` | id spreadsheet dev |
+| `PTX_SPREADSHEET_ID_PROD` | id spreadsheet prod |
+| `GOOGLE_APPLICATION_CREDENTIALS` | path service-account key (secret) |
+| `PTX_LOG_LEVEL` | `info` default |
+| `PTX_AUDIT_PATH` | path audit log |
+
+Aturan:
+
+- `PTX_ENV=prod` → client dipaksa read-only (scope readonly, tool tulis disabled).
+- Spreadsheet id tidak pernah masuk kode; selalu dari env.
+- Kunci SA tidak masuk repo; disediakan lewat secret store / path di luar repo.
+
+## 6. Kontrak Tool (Fase 0)
+
+Bentuk respons seragam:
 
 ```json
 {
   "ok": true,
   "data": {},
-  "meta": { "source_tabs": [], "rev": null, "fetched_at": "ISO", "warnings": [], "conflicts": [] }
+  "meta": {
+    "env": "dev",
+    "source_tabs": [],
+    "rev": null,
+    "fetched_at": "2026-09-27T15:00:00Z",
+    "warnings": [],
+    "conflicts": []
+  }
 }
 ```
 
-### 5.1 `planning_index`
+| Tool | Input | Output inti |
+| --- | --- | --- |
+| `planning_index` | `{kind?}` | `tabs[]{title,kind,purpose,issues,owner,action}` |
+| `budget_summary` | `{scenario?}` | `lines[], subtotal_idr, buffer_idr, total_out_idr, income{}, gap_idr, sponsor_target_idr, scenarios[], notes[]` |
+| `ticket_summary` | `{}` | `tiers[]{name,includes,price_idr,packages,pax,total_idr,note}, total_ticket_idr, avg_per_pax_idr` |
+| `sponsor_pipeline` | `{}` | `packages[]{...}, targets_idr, prospects[]{...}` |
+| `speaker_candidates` | `{status?,pic?,include_ref?}` | `candidates[]{name,topic,role,pic,status,status_raw,notes}` |
+| `task_list` | `{pic?,status?,overdue_before?,source?}` | `tasks[]{id,task,pic,deadline,status,note,source_tab}` |
+| `logistic_needs` | `{division?}` | `needs[]{...}, vendors[]{...}` |
+| `agenda_zona` | `{zona?}` | `blocks[]{zona,start,end,duration,session,format,pic,note}` |
 
-- Input: `{ "kind": "Aktif|Referensi|Draft|Legacy|Duplikat|Arsip" }` (opsional)
-- Output: `data.tabs[] { title, kind, purpose, issues, owner, action }`
-
-### 5.2 `budget_summary`
-
-- Input: `{ "scenario": "all|belanja|inout|tiket" }`
-- Output:
-  - `data.lines[] { category, item, qty, unit, unit_price_idr, total_idr, note }`
-  - `data.subtotal_idr`, `data.buffer_idr`, `data.total_out_idr`
-  - `data.income { google_idr, ticket_idr, sponsor_idr }`
-  - `data.gap_idr`, `data.sponsor_target_idr`
-  - `data.scenarios[] { label, gap_idr }`
-  - `data.notes[]`
-- Konflik: `meta.conflicts[]` bila total/angka kunci beda antar tab.
-
-### 5.3 `ticket_summary`
-
-- Output: `data.tiers[] { name, includes, price_idr, packages, pax, total_idr, note }`,
-  `data.total_ticket_idr`, `data.avg_per_pax_idr`.
-
-### 5.4 `sponsor_pipeline`
-
-- Output: `data.packages[] { name, slots, price_idr, potential_idr, note }`,
-  `data.targets_idr`, `data.prospects[] { company, pic, expected_usd, status, note }`.
-
-### 5.5 `speaker_candidates`
-
-- Input: `{ "status": "<enum|raw>", "pic": "string", "include_ref": true }`
-- Output: `data.candidates[] { name, topic, role, pic, status, status_raw, notes }`
-
-### 5.6 `task_list`
-
-- Input: `{ "pic": "string", "status": "enum", "overdue_before": "YYYY-MM-DD",
-  "source": "General Task|Task OBJ *" }`
-- Output: `data.tasks[] { id, task, pic, deadline, status, note, source_tab }`
-- Baris tanpa PIC/deadline → `pic: null`, `deadline: null` (jangan dikarang).
-
-### 5.7 `logistic_needs`
-
-- Output: `data.needs[] { division, item, qty, notes, status }`,
-  `data.vendors[] { item, vendor, contact, note }`.
-
-### 5.8 `agenda_zona`
-
-- Input: `{ "zona": "global|main_hall|workshop|auditorium" }`
-- Output: `data.blocks[] { zona, start, end, duration, session, format, pic, note }`
-
-## 6. Jalur Tulis (Fase 1)
+## 7. Jalur Tulis (Fase 1, dev-only)
 
 ```
 call(task_upsert)
-  -> validate schema + enum + PIC/deadline
-  -> refuse if tab.kind == "Arsip"
+  -> validate zod schema
+  -> domain rules: enum + PIC/deadline + tab bukan Arsip
+  -> refuse if PTX_ENV == "prod"
   -> approval prompt (operator)
-  -> clear block -> values update (RAW, padded)
+  -> clear block -> values.update (RAW, padded)
   -> read-back exact cells
-  -> update Rev. row
-  -> append revision note
+  -> update Rev. row + append revision note
   -> audit log
   -> return before/after
 ```
 
-Aturan turunan (dari `planning-trix-revisions.md`): perubahan satu baris wajib
-ikut memperbarui subtotal → total → buffer → gap → baris skenario → catatan.
-Server menolak tulis kalau angka turunan tidak ikut disertakan.
+## 8. Error Handling
 
-## 7. Error Handling
+Semua error dipetakan ke kode stabil (client tidak perlu tahu detail Google):
 
-| Kondisi | Perilaku |
+| Kondisi | Kode |
 | --- | --- |
-| Tool error `gws` | Kembalikan `{ok:false, error:{code:"GWS_ERROR", message}}` |
-| Parse gagal | `E_PARSE`, sertakan potongan output mentah terbatas |
-| Tab tidak ada | `E_TAB_NOT_FOUND`, sertakan daftar tab mirip |
-| Kolom tidak cocok header | `E_SCHEMA_MISMATCH`, tunjukkan header aktual |
-| Nilai di luar enum | Field `unknown` + `warning`, bukan error fatal |
+| API 401/403 | `E_AUTH` |
+| API 404 / tab hilang | `E_TAB_NOT_FOUND` |
+| API 429/5xx habis retry | `E_UPSTREAM` |
+| Header tidak cocok registry | `E_SCHEMA_MISMATCH` |
+| Input tidak lolos validasi | `E_VALIDATION` |
+| Tulis ke tab arsip / prod | `E_WRITE_FORBIDDEN` |
+| Nilai di luar enum | `warning` + field `unknown` (bukan fatal) |
 | Konflik angka | `meta.conflicts[]`, `ok` tetap true |
-| Tulis ditolak | `E_VALIDATION`, sebutkan aturan yang gagal |
 
-## 8. Keamanan
+## 9. Keamanan
 
-- Tidak ada token di config/repo. Semua akses lewat OAuth `gws` di host.
-- Read-only default; tool tulis butuh mode eksplisit + approval.
-- Tab `(Arsip)` read-only.
-- Data budget, sponsor, kontak eksternal: internal, jangan keluar group.
-- Audit log lokal, tidak boleh berisi rahasia.
+- Service-account key: secret store / path di luar repo, scope minimum.
+- Prod selalu read-only. Tulis hanya dev + approval.
+- Tab arsip read-only.
+- Data budget, sponsor, kontak eksternal: internal.
+- Audit log lokal, tanpa rahasia; rotasi kunci SA berkala.
 
-## 9. Deployment & Konfigurasi
+## 10. Deployment
 
 ```bash
-# registrasi (contoh, dijalankan saat implementasi)
+# build
+npm ci && npm run build
+
+# registrasi MCP (stdio), env diset di config server
 openclaw mcp add planning-trix \
   --command node \
-  --arg /home/farhan/.openclaw/workspace-devfest/tools/planning-trix-mcp/dist/index.js \
-  --cwd /home/farhan/.openclaw/workspace-devfest/tools/planning-trix-mcp
+  --arg <path>/dist/index.js \
+  --env PTX_ENV=dev \
+  --env PTX_SPREADSHEET_ID_DEV=<id>
 
 openclaw mcp doctor planning-trix --probe
-openclaw mcp tools planning-trix --include 'planning_index,budget_summary,...'
 ```
 
-- Filter tool per-server: fase 0 hanya expose tool baca.
-- Kalau host pindah mesin, `gws` + config MCP harus ada di mesin itu.
+- Fase 0 expose hanya tool baca (`openclaw mcp tools planning-trix --include ...`).
+- Kalau host pindah mesin: butuh Node + kunci SA + env yang sama.
 
-## 10. Struktur Repo (usulan)
+## 11. Struktur Repo (usulan)
 
 ```
-docs/planning-trix-mcp/
-  PRD.md
-  SYSTEM-DESIGN.md
-  registry.example.json
-tools/planning-trix-mcp/        # implementasi (fase berikutnya)
-  package.json
-  src/index.js
-  src/adapters/gws.js
-  src/normalize/*.js
-  src/registry/planning.json
-  test/fixtures/*.json
-  test/*.test.js
+tools/planning-trix-mcp/
+  package.json                 # type: module, engines >=22
+  src/
+    index.js                   # entry MCP stdio
+    config/env.js              # baca env + validasi
+    domain/
+      entities/               # Task, BudgetLine, SpeakerCandidate, ...
+      enums.js                # enum kanonik (single source)
+      normalize/              # status, money, date, phone, boolean
+      rules/                  # aturan validasi tulis
+      services/               # BudgetService, SpeakerService, ...
+    infra/
+      sheets/SheetsClient.js
+      sheets/auth.js
+      registry/RegistryRepository.js
+      registry/planning.json
+      cache/memory-cache.js
+    app/
+      tools/                  # 1 file per tool MCP
+      output/format.js        # JSON + ringkasan teks
+    observability/
+      logger.js
+      audit.js
+  test/
+    unit/                     # normalizer, rules, services (tanpa jaringan)
+    contract/                 # handler vs fixture
+    fixtures/                 # respons Sheets API tersimpan
+  registry/planning.json      # (atau di src/infra/registry)
 ```
 
-## 11. Rencana Tes
+## 12. Rencana Tes
 
-- Unit: normalizer (status, money, date, phone, bool) + registry loader.
-- Kontrak: tiap tool diuji terhadap fixture `gws` (output nyata yang disimpan).
-- Integrasi: 1 panggilan `batchGet` nyata per tool (read-only) + cek bentuk output.
-- Negatif: tab arsip ditolak, kolom tidak cocok, error gws, nilai di luar enum.
-- Probe: `openclaw mcp doctor planning-trix --probe` harus melaporkan tool lengkap.
+- **Unit** (tanpa I/O): normalizer, enum mapping, rules, services dengan repo palsu.
+- **Contract**: tiap handler diuji terhadap fixture respons Sheets API (bentuk
+  nyata yang disimpan), memastikan field output stabil.
+- **Integrasi** (opt-in, dev): panggilan nyata read-only + cek bentuk.
+- **Negatif**: tab arsip ditolak, prod write ditolak, header mismatch, enum luar,
+  error API dipetakan ke kode stabil.
+- **Probe**: `openclaw mcp doctor planning-trix --probe` melaporkan semua tool.
 
-## 12. Observability
+## 13. Observability
 
-- Log tiap tool call: nama, durasi, jumlah baris, warning/conflict.
-- Tidak log isi sensitif penuh (kontak) kecuali mode debug.
-- `meta.warnings[]` dan `meta.conflicts[]` jadi sinyal kualitas data.
+- Log tiap tool call: nama, env, durasi, jumlah baris, warning, conflict.
+- Tidak log isi kontak penuh kecuali debug.
+- `meta.warnings[]` + `meta.conflicts[]` = sinyal kualitas data.
 
-## 13. Milestone Teknis
+## 14. Milestone Teknis
 
-- M0: registry + adapter + normalizer + tes unit.
-- M1: 8 tool baca + tes kontrak + `mcp add` + probe hijau.
-- M2: 3 tool tulis + validator + audit + approval.
+- M0: config + SheetsClient + registry + normalizer + tes unit.
+- M1: 8 tool baca + tes kontrak + `mcp add` + probe hijau (dev).
+- M2: 3 tool tulis + validator + audit + approval (dev).
 - M3: resource + sinkron memori.
+- M4: cutover prod (checklist PRD bagian 12).
 
-## 14. Alternatif yang Dipertimbangkan
+## 15. Alternatif yang Dipertimbangkan
 
-- **CLI `ptx` + skill** (tanpa MCP): lebih murah, cukup untuk 1 agent. Ditolak
-  karena tujuan Kak Farhan adalah satu pintu untuk banyak klien dan tool typed.
-- **Google Apps Script web app**: tanpa stdio, tapi menambah surface publik dan
-  auth sendiri. Ditolak.
-- **Cache penuh spreadsheet lokal**: cepat, tapi risiko stale tinggi. Ditunda;
-  bisa ditambah di Fase 2 dengan TTL.
+- **`gws` CLI sebagai backend**: ditolak (parsing stdout rapuh, quirk keyring,
+  `--json @file` tidak didukung, error handling berbasis teks).
+- **HTTP MCP server**: ditolak untuk fase awal (butuh auth + expose port).
+- **Apps Script web app**: ditolak (surface publik + auth sendiri).
+- **Cache penuh spreadsheet lokal**: ditunda ke Fase 2 (risiko stale; butuh TTL).
+- **Hitung turunan di server**: ditolak; turunan tetap formula sheet supaya
+  panitia dan agent melihat angka yang sama.
