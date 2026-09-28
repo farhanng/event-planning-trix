@@ -147,6 +147,67 @@ test('budget_summary + conflict detection', async () => {
   assert.equal(clean.subtotal_idr, 100);
 });
 
+test('budget_summary skips summary blocks and buffer', async () => {
+  const sheets = makeSheets({
+    'Budget 2026 (Draft)': [
+      ['b1'], ['b2'], [], ['Kategori', 'Item', 'Qty', 'Satuan', 'Harga', 'Total', 'Catatan'],
+      ['A. Venue', 'Venue', '1', 'lot', '1000', '1000', ''],
+      [null, 'Extra', '2', 'pax', '500', '1000', ''],
+      ['', 'Subtotal A', '', '', '', '2000', ''],
+      ['TOTAL BELANJA', '', '', '', '', '2000', ''],
+      ['PEMASUKAN (skenario)', 'Tiket', '1', 'lot', '5000', '5000', ''],
+      ['', 'TOTAL PEMASUKAN', '', '', '', '5000', ''],
+      ['CATATAN & ASUMSI'],
+      ['1. anotasi bebas'],
+    ],
+    'Budget 2026 - In Out': [
+      ['b1'], ['b2'], [], ['Tipe', 'Sumber', 'Nominal', 'Status', 'Catatan'],
+      ['IN', 'Google', '53507477', '', ''],
+      ['IN', 'TOTAL IN', '86757477', '', ''],
+      ['OUT', 'Venue', '1000', '', ''],
+      ['OUT', 'Subtotal belanja', '2000', '', ''],
+      ['OUT', 'Buffer operasional', '5000', 'Cadangan', ''],
+      ['OUT', 'TOTAL OUT + buffer', '7000', '', ''],
+      ['OUT', 'TanpaNominal', '', '', ''],
+      ['OUT', '', '1000', '', ''],
+      ['POSISI', 'Gap', '5000', 'Target', ''],
+      ['Tiket', '', '', '', ''],
+    ],
+  });
+  const out = await run('budget_summary', devArgs(), { sheets });
+  assert.equal(out.lines.length, 2);
+  assert.equal(out.subtotal_idr, 2000);
+  assert.equal(out.entries.length, 3);
+  assert.equal(out.income_idr, 53507477);
+  assert.equal(out.buffer_idr, 5000);
+  assert.equal(out.total_out_idr, 7000);
+  assert.equal(out.gap_idr, 53507477 - 7000);
+  assert.deepEqual(out.conflicts, []);
+});
+
+test('takeDetails stops at summary marker for tiket and paket', async () => {
+  const sheets = makeSheets({
+    'Tiket 2026 (Draft)': [
+      ['b1'], ['b2'], [], ['Tier', 'Isi', 'Harga', 'Qty paket', 'Pax', 'Total', 'Catatan'],
+      ['Reguler', 'pass', '50000', '200', '200', '10000000', ''],
+      [null, 'baris lanjutan', '', '', '', '', ''],
+      ['TOTAL TIKET', '', '', '', '500', '33250000', ''],
+    ],
+    'Paket Sponsor 2026 (Draft)': [
+      ['b1'], ['b2'], [], ['Paket', 'Slot', 'Harga', 'Potensi', 'Catatan'],
+      ['Platinum', '2', '10000000', '20000000', ''],
+      ['USULAN 2026 (naik)', 'Slot', 'Harga lama', 'Harga baru', 'Kenaikan'],
+      ['Gold', '3', '9000000', '27000000', ''],
+    ],
+  });
+  const t = await run('ticket_summary', devArgs(), { sheets });
+  assert.equal(t.tiers.length, 2);
+  assert.equal(t.total_pax, 200);
+  const p = await run('speaker_packages', devArgs(), { sheets });
+  assert.equal(p.count, 1);
+  assert.equal(p.potential_total_idr, 20000000);
+});
+
 test('ticket_summary', async () => {
   const out = await run('ticket_summary', devArgs());
   assert.equal(out.total_ticket_idr, 25000000);

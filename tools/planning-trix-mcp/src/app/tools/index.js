@@ -9,6 +9,27 @@ const event = z.string().min(1);
 const lower = (v) => (v ?? '').toString().trim().toLowerCase();
 const contains = (hay, needle) => lower(hay).includes(lower(needle));
 
+// Baris ringkasan di dalam tab detail (mis. "Subtotal A", "TOTAL BELANJA").
+const AGG_RE = /^(subtotal|total|grand total)\b/i;
+// Awal blok yang bukan lagi detail: agregat, posisi dana, skenario, catatan.
+const MARKER_RE = /^(total|subtotal|grand total|posisi|skenario|catatan|benefit|usulan|paket lama|budget buffer|kebutuhan|gap|in - out)\b/i;
+// Baris In-Out yang bukan pengeluaran nyata (agregat / buffer cadangan).
+const ENTRY_MARKER_RE = /^(total|subtotal|posisi|gap|in - out|buffer)\b/i;
+const isBufferEntry = (e) => /^buffer\b/i.test(e.source ?? '');
+const isDetailEntry = (e) => (e.type === 'In' || e.type === 'Out') && e.nominal_idr != null && !ENTRY_MARKER_RE.test(e.source ?? '');
+
+// Ambil baris detail sampai marker ringkasan/section pertama. Baris lanjutan (key kosong) tetap ikut.
+function takeDetails(rows, keyField) {
+  const out = [];
+  for (const r of rows) {
+    const key = r[keyField];
+    if (key == null) { out.push(r); continue; }
+    if (MARKER_RE.test(String(key))) break;
+    out.push(r);
+  }
+  return out;
+}
+
 // Nama tab kanonik (harus sama dengan registry/planning.json).
 export const TABS = Object.freeze({
   budgetLines: 'Budget 2026 (Draft)',
@@ -78,7 +99,9 @@ export function budgetLine(row) {
 
 export function budgetEntry(row) {
   const rawType = clean(row.type);
-  const type = lower(rawType).startsWith('in') ? 'In' : (rawType == null ? null : 'Out');
+  const t = lower(rawType);
+  // Hanya 'IN'/'OUT' yang dianggap entri; baris POSISI/SKENARIO/CATATAN -> null (tidak dihitung).
+  const type = t === 'in' ? 'In' : (t === 'out' ? 'Out' : null);
   return {
     type, source: clean(row.source), nominal_idr: toMoney(row.nominal_idr),
     status: mapPayment(row.status_raw), raw_status: clean(row.status_raw), note: clean(row.note),
@@ -197,24 +220,41 @@ export const TOOLS = {
     description: 'Anggaran draft: baris budget, pemasukan/pengeluaran, subtotal, gap.',
     shape: { event, scenario: z.string().optional() },
     run: async (ctx) => {
-      const lines = (await readTab(ctx, TABS.budgetLines)).rows.map(budgetLine);
-      const entries = (await readTab(ctx, TABS.budgetEntries)).rows.map(budgetEntry);
+      const rawLines = (await readTab(ctx, TABS.budgetLines)).rows;
+      // Hanya blok belanja, dan hanya baris detail (bukan Subtotal/TOTAL/pemasukan/catatan).
+      let section = 'belanja';
+      const lines = [];
+      for (const l of rawLines) {
+        const cat = l.category ?? '';
+        if (/^pemasukan/i.test(cat)) { section = 'pemasukan'; continue; }
+        if (/^catatan/i.test(cat)) { section = 'catatan'; continue; }
+        if (section !== 'belanja' || !l.item || AGG_RE.test(l.item)) continue;
+        lines.push(budgetLine(l));
+      }
+      const allEntries = (await readTab(ctx, TABS.budgetEntries)).rows.map(budgetEntry);
+      const entries = allEntries.filter(isDetailEntry);
+      const buffer_idr = sumBy(allEntries.filter(isBufferEntry), 'nominal_idr');
       const subtotal_idr = sumBy(lines, 'total_idr');
       const income = entries.filter((e) => e.type === 'In');
-      const expense = entries.filter((e) => e.type !== 'In');
+      const expense = entries.filter((e) => e.type === 'Out');
       const income_idr = sumBy(income, 'nominal_idr');
-      const total_out_idr = sumBy(expense, 'nominal_idr');
+      const expense_idr = sumBy(expense, 'nominal_idr');
+      const total_out_idr = expense_idr + buffer_idr;
       const gap_idr = income_idr - total_out_idr;
       const conflicts = [];
-      if (subtotal_idr !== total_out_idr && total_out_idr > 0 && subtotal_idr > 0) {
-        conflicts.push({ field: 'total_out_idr', values: [subtotal_idr, total_out_idr], source_tabs: [TABS.budgetLines, TABS.budgetEntries] });
+      if (subtotal_idr !== expense_idr && expense_idr > 0 && subtotal_idr > 0) {
+        conflicts.push({ field: 'subtotal_idr', values: [subtotal_idr, expense_idr], source_tabs: [TABS.budgetLines, TABS.budgetEntries] });
       }
       return {
-        lines, entries, subtotal_idr, income_idr, total_out_idr, gap_idr, conflicts,
+        lines, entries, subtotal_idr, income_idr, total_out_idr, buffer_idr, gap_idr, conflicts,
         scenario: DRAFT_SCENARIO,
         warnings: ['Angka dari tab berlabel (Draft): belum final, jangan dipakai sebagai acuan tunggal.'],
         source_tabs: [TABS.budgetLines, TABS.budgetEntries],
-        summary: [`Subtotal: Rp${subtotal_idr.toLocaleString('id-ID')}`, `Gap: Rp${gap_idr.toLocaleString('id-ID')}`],
+        summary: [
+          `Subtotal belanja: Rp${subtotal_idr.toLocaleString('id-ID')}`,
+          `Buffer: Rp${buffer_idr.toLocaleString('id-ID')}`,
+          `Gap sponsor: Rp${Math.abs(gap_idr).toLocaleString('id-ID')}`,
+        ],
       };
     },
   },
@@ -223,7 +263,7 @@ export const TOOLS = {
     description: 'Tier tiket (draft): harga, packages, pax, total.',
     shape: { event },
     run: async (ctx) => {
-      const tiers = (await readTab(ctx, TABS.tickets)).rows.map(ticketRow);
+      const tiers = takeDetails((await readTab(ctx, TABS.tickets)).rows, 'tier').map(ticketRow);
       const total_ticket_idr = sumBy(tiers, 'total_idr');
       const pax = sumBy(tiers, 'pax');
       return {
@@ -258,7 +298,7 @@ export const TOOLS = {
     description: 'Paket sponsor (draft): harga, slot, potensi total.',
     shape: { event },
     run: async (ctx) => {
-      const packages = (await readTab(ctx, TABS.sponsorPackages)).rows.map(sponsorPackageRow);
+      const packages = takeDetails((await readTab(ctx, TABS.sponsorPackages)).rows, 'package').map(sponsorPackageRow);
       return {
         packages, count: packages.length,
         potential_total_idr: sumBy(packages, 'potential_total_idr'),
