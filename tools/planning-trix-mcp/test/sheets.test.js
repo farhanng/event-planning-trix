@@ -60,3 +60,42 @@ test('createSheetsClient defaults (uses global fetch)', () => {
   assert.equal(typeof client.getValues, 'function');
   assert.equal(typeof client.batchGet, 'function');
 });
+
+test('createSheetsClient appendValues', async () => {
+  const calls = [];
+  const fetch = async (url, init) => {
+    calls.push({ url, init });
+    return { ok: true, json: async () => ({ updates: { updatedRows: 1, updatedRange: 'Tab!A5:K5' } }) };
+  };
+  const client = createSheetsClient(cfg, { getToken: async () => 'tok', fetch });
+  const out = await client.appendValues('Tab', [['a', 'b']]);
+  assert.deepEqual(out, { updatedRows: 1, updatedRange: 'Tab!A5:K5' });
+  assert.match(calls[0].url, /Tab:append\?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS/);
+  assert.equal(calls[0].init.method, 'POST');
+  assert.equal(JSON.parse(calls[0].init.body).values[0][0], 'a');
+});
+
+test('createSheetsClient appendValues tolerates missing updates', async () => {
+  const fetch = async () => ({ ok: true, json: async () => ({}) });
+  const client = createSheetsClient(cfg, { getToken: async () => 'tok', fetch });
+  assert.deepEqual(await client.appendValues('Tab', []), { updatedRows: 0, updatedRange: null });
+});
+
+test('createSheetsClient updateValues', async () => {
+  const calls = [];
+  const fetch = async (url, init) => {
+    calls.push({ url, init });
+    return { ok: true, json: async () => ({ updatedCells: 2, updatedRange: 'Tab!I2:K2' }) };
+  };
+  const client = createSheetsClient(cfg, { getToken: async () => 'tok', fetch });
+  const out = await client.updateValues('Tab!I2:K2', [['x', 'y', 'z']]);
+  assert.deepEqual(out, { updatedCells: 2, updatedRange: 'Tab!I2:K2' });
+  assert.match(calls[0].url, /values\/Tab!I2%3AK2\?valueInputOption=USER_ENTERED/);
+  assert.equal(calls[0].init.method, 'PUT');
+});
+
+test('createSheetsClient updateValues tolerates missing fields', async () => {
+  const fetch = async () => ({ ok: true, json: async () => ({}) });
+  const client = createSheetsClient(cfg, { getToken: async () => 'tok', fetch });
+  assert.deepEqual(await client.updateValues('R', [[]]), { updatedCells: 0, updatedRange: null });
+});

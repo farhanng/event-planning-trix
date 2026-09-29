@@ -7,6 +7,7 @@ export const ENUMS = Object.freeze({
   zona: Object.freeze(['Main Hall', 'Workshop', 'Auditorium', 'Foyer', 'Kids Zone']),
   tipePartner: Object.freeze(['Sponsor', 'Media Partner', 'Community', 'In-Kind']),
   statusKontak: Object.freeze(['Belum Dikontak', 'Dihubungi', 'Dealing', 'Win', 'Batal']),
+  potentialStatus: Object.freeze(['Baru', 'Dikurasi', 'Dipromosikan', 'Ditolak']),
   tabKind: Object.freeze(['Aktif', 'Referensi', 'Arsip', 'Draft', 'Turunan']),
 });
 

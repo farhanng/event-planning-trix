@@ -15,6 +15,7 @@ export const TABS = {
   'MEDIA PARTNER': { kind: 'Aktif', entity: 'partnership_deal', headerRow: 1, columns: { company: 'A', category: 'B', social_url: 'C', email: 'D', phone: 'E', address: 'F', terms: 'G' } },
   'LOGISTIC - NEEDS': { kind: 'Aktif', entity: 'logistic_need', headerRow: 5, columns: { division: 'B', item: 'C', quantity: 'D', notes: 'E', status: 'F' } },
   'Final New Volunteer': { kind: 'Aktif', entity: 'organizer', headerRow: 1, columns: { no: 'A', name: 'B', division: 'C', role: 'D', email: 'E', phone: 'F', occupation: 'G' } },
+  'Potential Volunteer': { kind: 'Aktif', entity: 'potential_volunteer', headerRow: 1, columns: { no: 'A', name: 'B', division: 'C', role: 'D', email: 'E', phone: 'F', occupation: 'G', source: 'H', status: 'I', note: 'J', promoted_at: 'K' } },
   'Job on Stage 2026 (Clean)': { kind: 'Aktif', entity: 'lo_roster', headerRow: 5, columns: { no: 'A', name: 'B', contact: 'C', origin: 'D', role: 'E', status: 'F', note: 'G' } },
   'Timeline Acara 2026 (Draft)': { kind: 'Draft', entity: 'agenda_block', headerRow: 6, columns: { start: 'A', end: 'B', duration: 'C', session: 'D', format: 'E', pic: 'F', note: 'G' } },
   'Index & Standar': { kind: 'Referensi', headerRow: 4, note: 'index + standar format' },
@@ -101,6 +102,12 @@ export const DATA = {
     ['1', 'Febby Deca Lestari', 'Program & Conference', 'Acara', 'lestari@x.com', '62085882270803', 'Mahasiswa'],
     ['2', 'Ayumi Putri', 'Program & Conference', 'Acara', 'ayumi@x.com', '62081386881171', 'Mahasiswa'],
   ],
+  'Potential Volunteer': [
+    ['no', 'nama', 'division', 'role', 'email', 'no_hp', 'pekerjaan', 'sumber', 'status', 'catatan', 'promoted_at'],
+    ['3', 'Putri Handayani', 'Program & Conference', 'Acara', 'putri@x.com', '620812345678', 'Mahasiswa', 'open recruitment', 'Baru', '', ''],
+    ['', 'Bagas Prakoso', 'Acara', '', '', '', '', '', 'Baru', '', ''],
+    ['1', 'Citra Dewi', 'Acara', '', '', '', '', '', 'Baru', '', ''],
+  ],
   'Job on Stage 2026 (Clean)': [
     ['PIC LO DevFest 2026'],
     ['Data 2025 sudah dipindah'],
@@ -124,15 +131,35 @@ export const DATA = {
 };
 
 export function makeSheets(data = DATA) {
+  const store = { ...data };
   return {
     async getValues(title) {
-      return data[title] ?? [];
+      return store[title] ?? [];
     },
     async batchGet(titles) {
       const out = {};
-      for (const t of titles) out[t] = data[t] ?? [];
+      for (const t of titles) out[t] = store[t] ?? [];
       return out;
     },
+    async appendValues(title, values) {
+      store[title] = [...(store[title] ?? []), ...values];
+      return { updatedRows: values.length, updatedRange: `${title}!A${store[title].length}` };
+    },
+    async updateValues(range, values) {
+      const m = /^'?(.+?)'?!([A-Z]+)(\d+):[A-Z]+(\d+)$/.exec(range);
+      if (m) {
+        const [, title, col, start, end] = m;
+        const row = Number(start) - 1;
+        const grid = store[title] ?? [];
+        const ci = col.split('').reduce((n, ch) => n * 26 + (ch.charCodeAt(0) - 64), 0) - 1;
+        grid[row] = grid[row] ?? [];
+        for (let i = 0; i < values[0].length; i++) grid[row][ci + i] = values[0][i];
+        store[title] = grid;
+        return { updatedCells: values[0].length, updatedRange: `${title}!${col}${start}:${end}` };
+      }
+      return { updatedCells: 0, updatedRange: range };
+    },
+    store,
   };
 }
 

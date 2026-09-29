@@ -59,5 +59,24 @@ export function createSheetsClient(cfg, deps = {}) {
       });
       return out;
     },
+    async appendValues(title, values) {
+      const query = new URLSearchParams({ valueInputOption: 'USER_ENTERED', insertDataOption: 'INSERT_ROWS' }).toString();
+      const res = await request(`/values/${encodeURIComponent(title)}:append?${query}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ values }),
+      });
+      const updates = res?.updates ?? {};
+      return { updatedRows: updates.updatedRows ?? 0, updatedRange: updates.updatedRange ?? null };
+    },
+    async updateValues(range, values) {
+      const query = new URLSearchParams({ valueInputOption: 'USER_ENTERED' }).toString();
+      const res = await request(`/values/${encodeURIComponent(range)}?${query}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ values }),
+      });
+      return { updatedCells: res?.updatedCells ?? 0, updatedRange: res?.updatedRange ?? null };
+    },
   };
 }

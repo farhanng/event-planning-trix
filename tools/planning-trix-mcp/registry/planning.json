@@ -416,6 +416,25 @@
           "occupation": "G"
         }
       },
+      "Potential Volunteer": {
+        "kind": "Aktif",
+        "entity": "potential_volunteer",
+        "headerRow": 1,
+        "note": "staging kurasi calon volunteer sebelum dipromosikan ke Final New Volunteer",
+        "columns": {
+          "no": "A",
+          "name": "B",
+          "division": "C",
+          "role": "D",
+          "email": "E",
+          "phone": "F",
+          "occupation": "G",
+          "source": "H",
+          "status": "I",
+          "note": "J",
+          "promoted_at": "K"
+        }
+      },
       "Team Meeting": {
         "kind": "Referensi"
       },

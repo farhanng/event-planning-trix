@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   TOOLS, taskRow, ticketRow, budgetLine, budgetEntry, sponsorPackageRow, designTaskRow,
-  objectiveRow, dealRow, speakerRow, organizerRow, logisticRow, loRow,
+  objectiveRow, dealRow, speakerRow, organizerRow, logisticRow, loRow, potentialVolunteerRow,
 } from '../src/app/tools/index.js';
-import { makeCtx, makeSheets, TABS } from './helpers.js';
+import { makeCtx, makeSheets, makeRegistry, TABS } from './helpers.js';
 
 const run = (name, args, overrides = {}) => TOOLS[name].run({ ...makeCtx(overrides), args });
 const devArgs = (extra = {}) => ({ event: 'devfest26', ...extra });
@@ -280,4 +280,204 @@ test('logistic_needs + lo_roster', async () => {
 
 test('unknown event propagates PtxError', async () => {
   await assert.rejects(() => run('task_list', { event: 'nope' }), (e) => e.code === 'E_EVENT_UNKNOWN');
+});
+
+test('potentialVolunteerRow defaults + unknown enum', () => {
+  const r = potentialVolunteerRow({ name: 'A', phone: '08123456789', status: 'baru' });
+  assert.equal(r.name, 'A');
+  assert.equal(r.phone, '+628123456789');
+  assert.equal(r.status, 'Baru');
+  assert.equal(r.raw_status, 'baru');
+  const d = potentialVolunteerRow({ name: 'B' });
+  assert.equal(d.status, 'Baru');
+  assert.equal(d.raw_status, null);
+  assert.equal(potentialVolunteerRow({ status: 'zzz' }).status, 'unknown');
+  assert.equal(potentialVolunteerRow({ promoted_at: '01/10/2026' }).promoted_at, '2026-10-01');
+  assert.equal(potentialVolunteerRow({ promoted_at: 'kemarin' }).promoted_at, 'kemarin');
+});
+
+test('list_potential_volunteers filters', async () => {
+  const all = await run('list_potential_volunteers', devArgs());
+  assert.equal(all.count, 3);
+  assert.equal(all.not_promoted, 3);
+  assert.equal(all.items[0].row, 2);
+  assert.equal((await run('list_potential_volunteers', devArgs({ division: 'program' }))).count, 1);
+  assert.equal((await run('list_potential_volunteers', devArgs({ status: 'baru' }))).count, 3);
+});
+
+test('add_potential_volunteer appends with next number + validation', async () => {
+  const sheets = makeSheets();
+  const out = await run('add_potential_volunteer', devArgs({ name: 'Dina', division: 'Acara', role: 'Runner', email: 'dina@x.com', phone: '081200001111' }), { sheets });
+  assert.equal(out.added.name, 'Dina');
+  assert.equal(out.added.phone, '+6281200001111');
+  assert.equal(out.added.status, 'Baru');
+  const appended = sheets.store['Potential Volunteer'].at(-1);
+  assert.equal(appended[0], 4);
+  assert.equal(appended[8], 'Baru');
+
+  const minimal = await run('add_potential_volunteer', devArgs({ name: 'Eka', division: 'Acara' }), { sheets: makeSheets() });
+  assert.equal(minimal.added.email, null);
+  assert.equal(minimal.added.phone, null);
+
+  await assert.rejects(
+    () => run('add_potential_volunteer', devArgs({ name: 'X', division: 'A', email: 'bad' })),
+    (e) => e.code === 'E_VALIDATION' && e.details.field === 'email',
+  );
+  await assert.rejects(
+    () => run('add_potential_volunteer', devArgs({ name: 'X', division: 'A', email: 'PUTRI@x.com' })),
+    (e) => e.code === 'E_VALIDATION' && e.details.field === 'email',
+  );
+  await assert.rejects(
+    () => run('add_potential_volunteer', devArgs({ name: 'X', division: 'A', phone: '620812345678' })),
+    (e) => e.code === 'E_VALIDATION' && e.details.field === 'phone',
+  );
+});
+
+test('add_potential_volunteer enforces dev write guard', async () => {
+  await assert.rejects(
+    () => run('add_potential_volunteer', devArgs({ name: 'X', division: 'A' }), { meta: { env: 'prod' } }),
+    (e) => e.code === 'E_WRITE_FORBIDDEN' && e.details.env === 'prod' && e.details.read_only === false,
+  );
+  await assert.rejects(
+    () => run('add_potential_volunteer', devArgs({ name: 'X', division: 'A' }), { meta: { env: 'dev', readOnly: true } }),
+    (e) => e.code === 'E_WRITE_FORBIDDEN' && e.details.read_only === true,
+  );
+  const noMeta = makeCtx();
+  delete noMeta.meta;
+  await assert.rejects(
+    () => TOOLS.add_potential_volunteer.run({ ...noMeta, args: devArgs({ name: 'X', division: 'A' }) }),
+    (e) => e.code === 'E_WRITE_FORBIDDEN' && e.details.env === null,
+  );
+  const registry = makeRegistry({
+    tabsByEvent: { devfest26: { ...TABS, 'Potential Volunteer': { ...TABS['Potential Volunteer'], kind: 'Arsip' } } },
+  });
+  await assert.rejects(
+    () => run('add_potential_volunteer', devArgs({ name: 'X', division: 'A' }), { registry }),
+    (e) => e.code === 'E_WRITE_FORBIDDEN' && e.details.kind === 'Arsip',
+  );
+  const noKind = makeRegistry({
+    tabsByEvent: { devfest26: { ...TABS, 'Potential Volunteer': { entity: 'potential_volunteer', headerRow: 1, columns: TABS['Potential Volunteer'].columns } } },
+  });
+  assert.equal((await run('add_potential_volunteer', devArgs({ name: 'Z', division: 'A' }), { registry: noKind })).added.name, 'Z');
+});
+
+test('rowToValues skips invalid column letters', async () => {
+  const registry = makeRegistry({
+    tabsByEvent: { devfest26: { ...TABS, 'Potential Volunteer': { ...TABS['Potential Volunteer'], columns: { ...TABS['Potential Volunteer'].columns, bad: 'A1', num: 5 } } } },
+  });
+  const sheets = makeSheets();
+  await run('add_potential_volunteer', devArgs({ name: 'Bad Kolom', division: 'Acara' }), { registry, sheets });
+  const appended = sheets.store['Potential Volunteer'].at(-1);
+  assert.equal(appended[1], 'Bad Kolom');
+});
+
+test('potential volunteer helpers tolerate missing columns + headerRow', async () => {
+  const registry = makeRegistry({
+    tabsByEvent: { devfest26: { ...TABS, 'Potential Volunteer': { kind: 'Aktif', entity: 'potential_volunteer' } } },
+  });
+  const sheets = makeSheets();
+  const empty = await run('list_potential_volunteers', devArgs(), { registry, sheets });
+  assert.equal(empty.count, 0);
+  const added = await run('add_potential_volunteer', devArgs({ name: 'Tanpa Kolom', division: 'Acara' }), { registry, sheets });
+  assert.equal(added.added.name, 'Tanpa Kolom');
+});
+
+test('list_potential_volunteers tolerates non-array values + missing headerRow', async () => {
+  const cols = TABS['Potential Volunteer'].columns;
+  const registry = makeRegistry({
+    tabsByEvent: { devfest26: { ...TABS, 'Potential Volunteer': { kind: 'Aktif', entity: 'potential_volunteer', columns: cols } } },
+  });
+  const sheets = makeSheets();
+  sheets.getValues = async () => null;
+  const out = await run('list_potential_volunteers', devArgs(), { registry, sheets });
+  assert.equal(out.count, 0);
+});
+
+test('list_potential_volunteers fallback for blank row + raw_status', async () => {
+  const sheets = makeSheets();
+  sheets.store['Potential Volunteer'] = [
+    ['no', 'nama', 'division', 'role', 'email', 'no_hp', 'pekerjaan', 'sumber', 'status', 'catatan', 'promoted_at'],
+    ['', '', '', '', '', '', '', '', '', '', ''],
+    ['1', '', '', '', '', '', '', '', 'Baru', '', ''],
+  ];
+  const all = await run('list_potential_volunteers', devArgs(), { sheets });
+  assert.equal(all.count, 1);
+  assert.match(all.summary[0], /^- \| - \| Baru$/);
+  const filtered = await run('list_potential_volunteers', devArgs({ status: 'zzz' }), { sheets });
+  assert.equal(filtered.count, 0);
+  const rawNull = await run('list_potential_volunteers', devArgs({ status: 'unknown' }), { sheets });
+  assert.equal(rawNull.count, 0);
+  const byRaw = makeSheets();
+  byRaw.store['Potential Volunteer'] = [
+    ['no', 'nama', 'division', 'role', 'email', 'no_hp', 'pekerjaan', 'sumber', 'status', 'catatan', 'promoted_at'],
+    ['1', 'Raw Cocok', 'Acara', '', '', '', '', '', 'Pending', '', ''],
+  ];
+  const hit = await run('list_potential_volunteers', devArgs({ status: 'Pending' }), { sheets: byRaw });
+  assert.equal(hit.count, 1);
+  const byNullRaw = makeSheets();
+  byNullRaw.store['Potential Volunteer'] = [
+    ['no', 'nama', 'division', 'role', 'email', 'no_hp', 'pekerjaan', 'sumber', 'status', 'catatan', 'promoted_at'],
+    ['1', 'Raw Null', 'Acara', '', '', '', '', '', '', '', ''],
+  ];
+  const miss = await run('list_potential_volunteers', devArgs({ status: 'zzz' }), { sheets: byNullRaw });
+  assert.equal(miss.count, 0);
+});
+
+test('promote_volunteer moves to Final New Volunteer + stamps pool', async () => {
+  const sheets = makeSheets();
+  const out = await run('promote_volunteer', devArgs({ name: 'Putri Handayani' }), { sheets });
+  assert.equal(out.promoted.status, 'Dipromosikan');
+  assert.equal(out.promoted.name, 'Putri Handayani');
+  assert.match(out.promoted.promoted_at, /^\d{4}-\d{2}-\d{2}$/);
+  const finalRow = sheets.store['Final New Volunteer'].at(-1);
+  assert.equal(finalRow[0], 3);
+  assert.equal(finalRow[1], 'Putri Handayani');
+  const stamped = sheets.store['Potential Volunteer'][1];
+  assert.equal(stamped[8], 'Dipromosikan');
+  assert.match(stamped[10], /^\d{4}-\d{2}-\d{2}$/);
+
+  const custom = await run('promote_volunteer', devArgs({ name: 'Bagas Prakoso', target_status: 'Ditolak' }), { sheets: makeSheets() });
+  assert.equal(custom.promoted.status, 'Ditolak');
+});
+
+test('promote_volunteer error paths', async () => {
+  await assert.rejects(
+    () => run('promote_volunteer', devArgs({ name: 'Putri Handayani', target_status: 'zzz' })),
+    (e) => e.code === 'E_VALIDATION' && Array.isArray(e.details.allowed),
+  );
+  await assert.rejects(
+    () => run('promote_volunteer', devArgs({ name: 'Tidak Ada' })),
+    (e) => e.code === 'E_TAB_NOT_FOUND',
+  );
+  const promoted = makeSheets();
+  promoted.store['Potential Volunteer'] = [
+    ['no', 'nama', 'division', 'role', 'email', 'no_hp', 'pekerjaan', 'sumber', 'status', 'catatan', 'promoted_at'],
+    ['1', 'Sudah Jadi', 'Acara', '', '', '', '', '', 'Dipromosikan', '', '2026-09-29'],
+  ];
+  await assert.rejects(
+    () => run('promote_volunteer', devArgs({ name: 'Sudah Jadi' }), { sheets: promoted }),
+    (e) => e.code === 'E_VALIDATION' && /sudah dipromosikan/.test(e.message),
+  );
+  const dupFinal = makeSheets();
+  dupFinal.store['Potential Volunteer'] = [
+    ['no', 'nama', 'division', 'role', 'email', 'no_hp', 'pekerjaan', 'sumber', 'status', 'catatan', 'promoted_at'],
+    ['1', 'Febby Kembar', 'Program', '', 'lestari@x.com', '', '', '', 'Baru', '', ''],
+  ];
+  await assert.rejects(
+    () => run('promote_volunteer', devArgs({ name: 'Febby Kembar' }), { sheets: dupFinal }),
+    (e) => e.code === 'E_VALIDATION' && /Sudah ada di Final/.test(e.message),
+  );
+  const dupPhone = makeSheets();
+  dupPhone.store['Potential Volunteer'] = [
+    ['no', 'nama', 'division', 'role', 'email', 'no_hp', 'pekerjaan', 'sumber', 'status', 'catatan', 'promoted_at'],
+    ['1', 'Tanpa Email', 'Program', '', '', '62085882270803', '', '', 'Baru', '', ''],
+  ];
+  await assert.rejects(
+    () => run('promote_volunteer', devArgs({ name: 'Tanpa Email' }), { sheets: dupPhone }),
+    (e) => e.code === 'E_VALIDATION' && /Sudah ada di Final/.test(e.message),
+  );
+  await assert.rejects(
+    () => run('promote_volunteer', devArgs({ name: 'Putri Handayani' }), { sheets: makeSheets(), meta: { env: 'prod', readOnly: true } }),
+    (e) => e.code === 'E_WRITE_FORBIDDEN',
+  );
 });

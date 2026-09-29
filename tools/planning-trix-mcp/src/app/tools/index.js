@@ -1,9 +1,11 @@
 import { z } from 'zod';
-import { listEvents, tabsForEvent, isWriteAllowed } from '../../infra/registry/registry.js';
+import { listEvents, tabsForEvent, isWriteAllowed, findTab } from '../../infra/registry/registry.js';
 import { readTab } from './read.js';
+import { cellAt, colToIndex } from './rows.js';
 import { clean, toInt, toMoney, toIsoDate, toPhone } from '../../domain/normalize.js';
 import { mapStatus, mapEnum, ENUMS } from '../../domain/enums.js';
 import { sumBy, uniqueBy } from '../../domain/aggregate.js';
+import { PtxError, ERROR_CODES } from '../../domain/errors.js';
 
 const event = z.string().min(1);
 const lower = (v) => (v ?? '').toString().trim().toLowerCase();
@@ -41,6 +43,7 @@ export const TABS = Object.freeze({
   objectives: 'Objectives',
   committee: 'Commitee',
   volunteers: 'Final New Volunteer',
+  potentialVolunteer: 'Potential Volunteer',
   speakers: '[LO] Speakers Candidate',
   partnership: 'Target Partnership',
   mediaPartner: 'MEDIA PARTNER',
@@ -49,6 +52,64 @@ export const TABS = Object.freeze({
 });
 
 const DRAFT_SCENARIO = 'draft';
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Guard tulis: tab harus writeable + environment harus dev (prod selalu read-only).
+function assertWritable(ctx, title) {
+  const tab = findTab(ctx.registry, ctx.args.event, title);
+  if (!isWriteAllowed(tab)) {
+    throw new PtxError(ERROR_CODES.E_WRITE_FORBIDDEN, `Tab '${title}' tidak boleh ditulis (kind Arsip/Draft)`, { title, kind: tab.kind });
+  }
+  if (ctx.meta?.env !== 'dev' || ctx.meta?.readOnly === true) {
+    throw new PtxError(ERROR_CODES.E_WRITE_FORBIDDEN, 'Tulis hanya diizinkan di environment dev', { env: ctx.meta?.env ?? null, read_only: ctx.meta?.readOnly === true });
+  }
+  return tab;
+}
+
+// Peta baris mentah -> objek + nomor baris absolut (untuk update sel).
+function mapRowsWithRow(values, tab) {
+  const headerRow = Number(tab.headerRow) || 1;
+  const cols = Object.entries(tab.columns ?? {}).filter(([, c]) => typeof c === 'string' && c);
+  const out = [];
+  (Array.isArray(values) ? values : []).slice(headerRow).forEach((row, i) => {
+    const obj = {};
+    for (const [field, col] of cols) obj[field] = cellAt(row, col);
+    if (Object.values(obj).some((v) => v != null && String(v).trim() !== '')) out.push({ row: headerRow + i + 1, obj });
+  });
+  return out;
+}
+
+// Objek -> array sel sesuai urutan kolom tab (untuk append/update).
+function rowToValues(tab, obj) {
+  const entries = Object.entries(tab.columns ?? {}).filter(([, c]) => typeof c === 'string' && c);
+  let max = -1;
+  for (const [, col] of entries) {
+    const idx = colToIndex(col);
+    if (idx != null) max = Math.max(max, idx);
+  }
+  const out = new Array(max + 1).fill('');
+  for (const [field, col] of entries) {
+    const idx = colToIndex(col);
+    if (idx == null) continue;
+    const v = obj[field];
+    out[idx] = v == null ? '' : v;
+  }
+  return out;
+}
+
+function nextNumber(items, numField = 'no') {
+  let max = 0;
+  for (const it of items) {
+    const n = toInt(it?.[numField]);
+    if (n != null && n > max) max = n;
+  }
+  return max + 1;
+}
+
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 // Status bayar pada LOGISTIC lama dan pada "In Out" memakai kosakata beda.
 function mapPayment(raw) {
@@ -155,6 +216,19 @@ export function speakerRow(row) {
     name: clean(row.name) ?? clean(row.person_name), topic: clean(row.topic),
     role: clean(row.role_title), pic: clean(row.contact_pic),
     status, raw_status: raw, notes: clean(row.notes),
+  };
+}
+
+export function potentialVolunteerRow(row) {
+  const raw = clean(row.status);
+  return {
+    no: clean(row.no), name: clean(row.name), division: clean(row.division),
+    role: clean(row.role), email: clean(row.email), phone: toPhone(row.phone),
+    occupation: clean(row.occupation), source: clean(row.source),
+    status: raw == null ? 'Baru' : mapEnum(raw, ENUMS.potentialStatus),
+    raw_status: raw,
+    note: clean(row.note),
+    promoted_at: toIsoDate(row.promoted_at) ?? clean(row.promoted_at),
   };
 }
 
@@ -412,6 +486,109 @@ export const TOOLS = {
         items, count: items.length,
         source_tabs: [TABS.loRoster],
         summary: items.map((l) => `${l.name} | ${l.role ?? '-'} | ${l.status ?? '-'}`),
+      };
+    },
+  },
+
+  list_potential_volunteers: {
+    description: 'Pool calon volunteer (belum dipromosikan) + filter divisi/status.',
+    shape: { event, division: z.string().optional(), status: z.string().optional() },
+    run: async (ctx) => {
+      const tab = findTab(ctx.registry, ctx.args.event, TABS.potentialVolunteer);
+      const values = await ctx.sheets.getValues(TABS.potentialVolunteer);
+      let items = mapRowsWithRow(values, tab).map(({ row, obj }) => ({ row, ...potentialVolunteerRow(obj) }));
+      if (ctx.args.division) items = items.filter((v) => contains(v.division, ctx.args.division));
+      if (ctx.args.status) items = items.filter((v) => lower(v.status) === lower(ctx.args.status) || lower(v.raw_status ?? '') === lower(ctx.args.status));
+      return {
+        items, count: items.length,
+        not_promoted: items.filter((v) => v.status !== 'Dipromosikan').length,
+        source_tabs: [TABS.potentialVolunteer],
+        summary: items.map((v) => `${v.name ?? '-'} | ${v.division ?? '-'} | ${v.status}`),
+      };
+    },
+  },
+
+  add_potential_volunteer: {
+    description: 'Tambah calon volunteer ke pool (append, dev-only).',
+    shape: {
+      event, name: z.string().min(1), division: z.string().min(1),
+      role: z.string().optional(), email: z.string().optional(), phone: z.string().optional(),
+      occupation: z.string().optional(), source: z.string().optional(), note: z.string().optional(),
+    },
+    run: async (ctx) => {
+      const a = ctx.args;
+      assertWritable(ctx, TABS.potentialVolunteer);
+      const tab = findTab(ctx.registry, ctx.args.event, TABS.potentialVolunteer);
+      const values = await ctx.sheets.getValues(TABS.potentialVolunteer);
+      const existing = mapRowsWithRow(values, tab).map(({ obj }) => potentialVolunteerRow(obj));
+      const email = clean(a.email);
+      const phone = toPhone(a.phone);
+      if (email && !EMAIL_RE.test(email)) {
+        throw new PtxError(ERROR_CODES.E_VALIDATION, 'Format email tidak valid', { field: 'email', value: email });
+      }
+      const dupEmail = email ? existing.find((v) => lower(v.email) === lower(email)) : null;
+      const dupPhone = phone ? existing.find((v) => v.phone === phone) : null;
+      const dup = dupEmail ?? dupPhone;
+      if (dup) {
+        throw new PtxError(ERROR_CODES.E_VALIDATION, 'Calon volunteer sudah ada di pool (email/HP sama)', { field: dupEmail ? 'email' : 'phone', existing: dup.name });
+      }
+      const row = rowToValues(tab, {
+        no: nextNumber(existing), name: clean(a.name), division: clean(a.division), role: clean(a.role),
+        email, phone, occupation: clean(a.occupation), source: clean(a.source), status: 'Baru',
+        note: clean(a.note), promoted_at: '',
+      });
+      const res = await ctx.sheets.appendValues(TABS.potentialVolunteer, [row]);
+      return {
+        added: { name: clean(a.name), division: clean(a.division), role: clean(a.role), email, phone, status: 'Baru' },
+        updated_range: res.updatedRange,
+        source_tabs: [TABS.potentialVolunteer],
+        warnings: ['Tulis hanya di environment dev.'],
+        summary: [`+ ${clean(a.name)} | ${clean(a.division)} | Baru`],
+      };
+    },
+  },
+
+  promote_volunteer: {
+    description: 'Promosikan calon volunteer ke Final New Volunteer (dev-only).',
+    shape: { event, name: z.string().min(1), target_status: z.string().optional() },
+    run: async (ctx) => {
+      const a = ctx.args;
+      assertWritable(ctx, TABS.volunteers);
+      const targetStatus = a.target_status == null ? null : mapEnum(a.target_status, ENUMS.potentialStatus);
+      if (a.target_status != null && targetStatus === 'unknown') {
+        throw new PtxError(ERROR_CODES.E_VALIDATION, 'target_status tidak dikenal', { allowed: ENUMS.potentialStatus });
+      }
+      const pool = findTab(ctx.registry, ctx.args.event, TABS.potentialVolunteer);
+      const values = await ctx.sheets.getValues(TABS.potentialVolunteer);
+      const entries = mapRowsWithRow(values, pool).map((e) => ({ row: e.row, v: potentialVolunteerRow(e.obj) }));
+      const hit = entries.find(({ v }) => lower(v.name) === lower(clean(a.name)));
+      if (!hit) throw new PtxError(ERROR_CODES.E_TAB_NOT_FOUND, `Calon '${a.name}' tidak ada di pool`, { name: a.name });
+      if (hit.v.status === 'Dipromosikan') {
+        throw new PtxError(ERROR_CODES.E_VALIDATION, 'Calon ini sudah dipromosikan', { name: hit.v.name });
+      }
+      const finalTab = findTab(ctx.registry, ctx.args.event, TABS.volunteers);
+      const finalValues = await ctx.sheets.getValues(TABS.volunteers);
+      const finalEntries = mapRowsWithRow(finalValues, finalTab);
+      const finalRows = finalEntries.map(({ obj }) => organizerRow(obj, 'Volunteer'));
+      const already = finalRows.find((o) => (hit.v.email && lower(o.email) === lower(hit.v.email)) || (hit.v.phone && o.phone === hit.v.phone));
+      if (already) {
+        throw new PtxError(ERROR_CODES.E_VALIDATION, 'Sudah ada di Final New Volunteer (email/HP sama)', { existing: already.name });
+      }
+      const newRow = rowToValues(finalTab, {
+        no: nextNumber(finalEntries.map((e) => e.obj)), name: hit.v.name, division: hit.v.division, role: hit.v.role,
+        email: hit.v.email, phone: hit.v.phone, occupation: hit.v.occupation,
+      });
+      await ctx.sheets.appendValues(TABS.volunteers, [newRow]);
+      const stamp = todayIso();
+      await ctx.sheets.updateValues(
+        `'${TABS.potentialVolunteer}'!${pool.columns.status}${hit.row}:${pool.columns.promoted_at}${hit.row}`,
+        [[targetStatus ?? 'Dipromosikan', hit.v.note ?? '', stamp]],
+      );
+      return {
+        promoted: { name: hit.v.name, division: hit.v.division, role: hit.v.role, status: targetStatus ?? 'Dipromosikan', promoted_at: stamp },
+        source_tabs: [TABS.potentialVolunteer, TABS.volunteers],
+        warnings: ['Tulis hanya di environment dev.'],
+        summary: [`${hit.v.name} -> Final New Volunteer (${targetStatus ?? 'Dipromosikan'})`],
       };
     },
   },
